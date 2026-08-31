@@ -1,0 +1,4 @@
+module CAirPlayFairPlay {
+    header "include/fairplay.h"
+    export *
+}

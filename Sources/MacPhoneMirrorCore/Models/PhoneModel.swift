@@ -1,0 +1,142 @@
+import Foundation
+import CoreGraphics
+
+public enum PhoneCutoutStyle: String, Codable, Sendable {
+    case dynamicIsland
+    case notch
+    case none // SE / Home button devices
+}
+
+public enum PhoneModel: String, CaseIterable, Identifiable, Codable, Sendable {
+    case iPhone16ProMax = "iPhone 16 Pro Max"
+    case iPhone16Pro = "iPhone 16 Pro"
+    case iPhone16Plus = "iPhone 16 Plus"
+    case iPhone16 = "iPhone 16"
+    case iPhone15ProMax = "iPhone 15 Pro Max"
+    case iPhone15Pro = "iPhone 15 Pro"
+    case iPhone15Plus = "iPhone 15 Plus"
+    case iPhone15 = "iPhone 15"
+    case iPhone14ProMax = "iPhone 14 Pro Max"
+    case iPhone14Pro = "iPhone 14 Pro"
+    case iPhone14 = "iPhone 14"
+    case iPhone13Pro = "iPhone 13 Pro"
+    case iPhone13 = "iPhone 13"
+    case iPhoneSE3 = "iPhone SE (3rd generation)"
+    case genericModern = "Generic Modern iPhone"
+    
+    public var id: String { rawValue }
+    
+    /// Native point resolution (e.g. 393 x 852 for iPhone 15/16 Pro)
+    public var pointSize: CGSize {
+        switch self {
+        case .iPhone16ProMax:
+            return CGSize(width: 440, height: 956)
+        case .iPhone16Pro:
+            return CGSize(width: 402, height: 874)
+        case .iPhone16Plus, .iPhone15Plus, .iPhone14ProMax, .iPhone15ProMax:
+            return CGSize(width: 430, height: 932)
+        case .iPhone16, .iPhone15Pro, .iPhone15, .iPhone14Pro:
+            return CGSize(width: 393, height: 852)
+        case .iPhone14, .iPhone13Pro, .iPhone13:
+            return CGSize(width: 390, height: 844)
+        case .iPhoneSE3:
+            return CGSize(width: 375, height: 667)
+        case .genericModern:
+            return CGSize(width: 393, height: 852)
+        }
+    }
+    
+    /// Native pixel resolution (e.g. 1179 x 2556)
+    public var pixelSize: CGSize {
+        let scale = scaleFactor
+        return CGSize(width: pointSize.width * scale, height: pointSize.height * scale)
+    }
+    
+    public var scaleFactor: CGFloat {
+        switch self {
+        case .iPhoneSE3:
+            return 2.0
+        default:
+            return 3.0
+        }
+    }
+    
+    public var aspectRatio: CGFloat {
+        pointSize.height / pointSize.width
+    }
+    
+    public var cutoutStyle: PhoneCutoutStyle {
+        switch self {
+        case .iPhone16ProMax, .iPhone16Pro, .iPhone16Plus, .iPhone16,
+             .iPhone15ProMax, .iPhone15Pro, .iPhone15Plus, .iPhone15,
+             .iPhone14ProMax, .iPhone14Pro, .genericModern:
+            return .dynamicIsland
+        case .iPhone14, .iPhone13Pro, .iPhone13:
+            return .notch
+        case .iPhoneSE3:
+            return .none
+        }
+    }
+    
+    /// Corner radius for the screen in points
+    public var screenCornerRadius: CGFloat {
+        switch self {
+        case .iPhone16ProMax, .iPhone16Pro:
+            return 56.0
+        case .iPhone16Plus, .iPhone16, .iPhone15ProMax, .iPhone15Pro, .iPhone15Plus, .iPhone15, .iPhone14ProMax, .iPhone14Pro, .genericModern:
+            return 53.0
+        case .iPhone14, .iPhone13Pro, .iPhone13:
+            return 47.0
+        case .iPhoneSE3:
+            return 0.0
+        }
+    }
+    
+    /// Hardware bezel corner radius
+    public var outerCornerRadius: CGFloat {
+        screenCornerRadius + 10.0
+    }
+    
+    /// Bezel thickness around the screen
+    public var bezelThickness: CGFloat {
+        switch self {
+        case .iPhone16ProMax, .iPhone16Pro:
+            return 3.0
+        case .iPhone15ProMax, .iPhone15Pro, .iPhone16, .iPhone16Plus:
+            return 4.0
+        case .iPhone15, .iPhone15Plus, .iPhone14ProMax, .iPhone14Pro, .genericModern:
+            return 4.5
+        case .iPhone14, .iPhone13Pro, .iPhone13:
+            return 5.5
+        case .iPhoneSE3:
+            return 18.0
+        }
+    }
+    
+    /// Dynamic Island normal size in points
+    public var dynamicIslandSize: CGSize {
+        CGSize(width: 125, height: 36)
+    }
+    
+    /// Top safe area inset in points
+    public var topSafeAreaInset: CGFloat {
+        switch cutoutStyle {
+        case .dynamicIsland:
+            return 59.0
+        case .notch:
+            return 47.0
+        case .none:
+            return 20.0
+        }
+    }
+    
+    /// Bottom safe area inset in points
+    public var bottomSafeAreaInset: CGFloat {
+        switch cutoutStyle {
+        case .dynamicIsland, .notch:
+            return 34.0
+        case .none:
+            return 0.0
+        }
+    }
+}
