@@ -10,12 +10,12 @@
 ## Highlights
 
 * 📱 **Ultra-Low Latency Screen Mirroring**: 60 FPS hardware-accelerated mirroring via USB (AVFoundation) and Wi-Fi AirPlay receivers.
+* 🪟 **Window per device**: Hub window waits for AirPlay; each connected phone opens in its own mirror window (merge into system tabs via *Window → Merge All Windows*).
 * ⚡ **Hardware Video Pipeline**: Zero-copy Metal rendering with `VideoToolbox` hardware H.264/HEVC decompression.
 * 🖱️ **Mac-to-iPhone Interaction**: Smooth mouse/trackpad pointer control, scrolling, and clicks via Bluetooth HID + iOS AssistiveTouch.
 * ⌨️ **Hardware Keyboard Navigation**: Type into iOS apps and trigger system shortcuts (`⌘H` for Home, `⌘Tab` for App Switcher, `⌘Space` for Spotlight, `Esc` to Lock).
 * 🎨 **High-Fidelity iPhone Frames**: Vector-rendered titanium chassis (Natural, Black, Desert, White, Deep Purple) with squircle screen clipping, animated Dynamic Island, and interactive hardware buttons.
-* 📊 **Real-Time Performance HUD**: Live overlay tracking FPS, decode latency, render latency, bit rate, and dropped frames.
-* 🧭 **Menu Bar Extra**: macOS status bar item for quick mirroring toggles and orientation switching.
+* 🧭 **Menu Bar Extra**: macOS status bar item for quick mirroring toggles.
 * 🔒 **100% Legitimate & Private**: Uses public Apple APIs, requires no jailbreak or companion iOS app, and processes all video strictly locally.
 
 ---
@@ -41,6 +41,8 @@ swift test
 # Run MacPhoneMirror
 swift run MacPhoneMirror
 ```
+
+When an iPhone connects via Screen Mirroring, MacPhoneMirror opens a **dedicated window** for that device. The main window stays as the hub (waiting / settings). Use *Window → Merge All Windows* to turn mirror windows into tabs.
 
 ---
 

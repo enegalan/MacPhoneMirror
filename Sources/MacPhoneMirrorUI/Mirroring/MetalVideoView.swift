@@ -44,9 +44,6 @@ public final class MetalViewStateHolder: ObservableObject, @unchecked Sendable {
         if renderer == nil {
             AppLogger.error("MetalVideoRenderer failed to initialize", category: .airplay)
         }
-        if let session = SessionManager.shared.currentReceiver {
-            bind(to: session)
-        }
     }
 
     public func bind(to receiver: ScreenMirrorReceiver) {
