@@ -57,7 +57,7 @@ MacPhoneMirror is structured with a modular, protocol-oriented Swift 6 architect
 
 #### E. State Machine & Session Manager
 * `ConnectionState`: State enum (`disconnected`, `discovering`, `connecting`, `mirroring`, `controlling`, `reconnecting`, `failed`).
-* `SessionManager`: Singleton coordinating active device, receiver, input transport, orientation, and diagnostics.
+* `SessionManager`: Singleton coordinating multiple concurrent sessions, each keyed by its session ID. Per-session resources (`sessionsByID`, `sessionReceivers`, `sessionTransports`) track a `MirrorSession` for device + orientation state, a `ScreenMirrorReceiver` for the video stream, and a `PhoneInputTransport` for input. A dedicated `MirrorSessionWindow` renders each device in its own window.
 
 ---
 

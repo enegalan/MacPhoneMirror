@@ -104,7 +104,7 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         NetworkStreamReceiver.shared.orientationPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] orientation in
-                self?.setOrientation(orientation)
+                self?.setOrientation(orientation, sessionID: self?.airPlaySessionIDs().first)
             }
             .store(in: &cancellables)
 
@@ -235,13 +235,10 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
     private func getTransport(for sessionID: String?) -> PhoneInputTransport? {
         lock.lock()
         defer { lock.unlock() }
-        if let sessionID, let transport = sessionTransports[sessionID] {
-            return transport
+        if let sessionID {
+            return sessionTransports[sessionID]
         }
-        if let activeSessionID, let transport = sessionTransports[activeSessionID] {
-            return transport
-        }
-        return sessionTransports.values.first
+        return activeSessionID.flatMap { sessionTransports[$0] } ?? sessionTransports.values.first
     }
 
     private func markListeningStarted() {
@@ -284,7 +281,6 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] devices in
                 guard let self else { return }
-                guard !self.hasActiveSessions else { return }
 
                 if let usbDevice = devices.first {
                     if self.connectedUSBDeviceID != usbDevice.id {
@@ -459,7 +455,7 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         viewportSize: CGSize,
         sessionID: String? = nil
     ) async {
-        let resolved = sessionID.flatMap { self.session(id: $0) } ?? activeSession
+        let resolved = sessionID.flatMap { self.session(id: $0) } ?? (sessionID == nil ? activeSession : nil)
         guard let session = resolved else { return }
 
         if let normPoint = coordinateMapper.map(

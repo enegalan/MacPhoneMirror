@@ -3,9 +3,11 @@ import MacPhoneMirrorCore
 
 public struct MenuBarExtraView: View {
     @ObservedObject private var sessionManager = SessionManager.shared
+    public let state: ConnectionState
     public let onOpenMainWindow: () -> Void
 
     public init(state: ConnectionState, onOpenMainWindow: @escaping () -> Void) {
+        self.state = state
         self.onOpenMainWindow = onOpenMainWindow
     }
 
@@ -15,7 +17,7 @@ public struct MenuBarExtraView: View {
                 Text("MacPhoneMirror")
                     .font(.headline)
                 Spacer()
-                StatusBadge(state: sessionManager.state)
+                StatusBadge(state: state)
             }
             .padding(.bottom, 4)
 
