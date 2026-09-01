@@ -31,14 +31,8 @@ public struct MirrorSessionWindow: View {
         }
         .frame(minWidth: 420, minHeight: 720)
         .navigationTitle(windowTitle)
-        .toolbar {
-            ToolbarItem(placement: .automatic) {
-                Button(role: .destructive) {
-                    SessionManager.shared.disconnect(sessionID: sessionID)
-                } label: {
-                    Label("Stop Mirroring", systemImage: "xmark.circle")
-                }
-            }
+        .onDisappear {
+            SessionManager.shared.disconnect(sessionID: sessionID)
         }
     }
 
