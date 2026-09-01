@@ -5,17 +5,20 @@ public struct PhoneFrameView<ScreenContent: View>: View {
     public let model: PhoneModel
     public let orientation: DeviceOrientation
     public let style: FrameRenderStyle
+    public let sessionID: String?
     public let screenContent: ScreenContent
 
     public init(
         model: PhoneModel = .iPhone16Pro,
         orientation: DeviceOrientation = .portrait,
         style: FrameRenderStyle = .standard,
+        sessionID: String? = nil,
         @ViewBuilder screenContent: () -> ScreenContent
     ) {
         self.model = model
         self.orientation = orientation
         self.style = style
+        self.sessionID = sessionID
         self.screenContent = screenContent()
     }
 
@@ -88,16 +91,16 @@ public struct PhoneFrameView<ScreenContent: View>: View {
                 HardwareButtonsView(
                     frameHeight: chassisSize.height + 16,
                     onActionButton: {
-                        Task { try? await SessionManager.shared.sendInputEvent(.siri) }
+                        Task { try? await SessionManager.shared.sendInputEvent(.siri, sessionID: sessionID) }
                     },
                     onVolumeUp: {
-                        Task { try? await SessionManager.shared.sendInputEvent(.volumeUp) }
+                        Task { try? await SessionManager.shared.sendInputEvent(.volumeUp, sessionID: sessionID) }
                     },
                     onVolumeDown: {
-                        Task { try? await SessionManager.shared.sendInputEvent(.volumeDown) }
+                        Task { try? await SessionManager.shared.sendInputEvent(.volumeDown, sessionID: sessionID) }
                     },
                     onPower: {
-                        Task { try? await SessionManager.shared.sendInputEvent(.lockScreen) }
+                        Task { try? await SessionManager.shared.sendInputEvent(.lockScreen, sessionID: sessionID) }
                     },
                     onCameraControl: {
                         AppLogger.info("Camera control triggered", category: .input)

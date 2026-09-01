@@ -32,7 +32,8 @@ public struct MirrorViewportView: View {
                     PhoneFrameView(
                         model: device.model,
                         orientation: orientation,
-                        style: style
+                        style: style,
+                        sessionID: sessionID
                     ) {
                         MetalVideoView(stateHolder: metalHolder)
                             .frame(width: screenSize.width, height: screenSize.height)
