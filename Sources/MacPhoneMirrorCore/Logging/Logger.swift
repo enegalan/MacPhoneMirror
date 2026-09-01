@@ -13,16 +13,16 @@ public enum LogCategory: String {
     case session = "Session"
 }
 
-public struct AppLogger {
+public enum AppLogger {
     private static let subsystem = "com.macphonemirror.app"
-    
-    nonisolated(unsafe) private static var loggers: [LogCategory: Logger] = [:]
+
+    private nonisolated(unsafe) static var loggers: [LogCategory: Logger] = [:]
     private static let lock = NSLock()
-    
+
     public static func logger(for category: LogCategory) -> Logger {
         lock.lock()
         defer { lock.unlock() }
-        
+
         if let existing = loggers[category] {
             return existing
         }
@@ -30,11 +30,11 @@ public struct AppLogger {
         loggers[category] = newLogger
         return newLogger
     }
-    
+
     public static func debug(_ message: String, category: LogCategory) {
         logger(for: category).debug("\(message, privacy: .public)")
     }
-    
+
     public static func info(_ message: String, category: LogCategory) {
         logger(for: category).info("\(message, privacy: .public)")
         echoToConsole(message, category: category, level: "INFO")

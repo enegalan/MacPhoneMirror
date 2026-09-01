@@ -1,5 +1,5 @@
-import Foundation
 import CryptoKit
+import Foundation
 import Network
 
 struct AirPlayHTTPRequest {
@@ -10,6 +10,7 @@ struct AirPlayHTTPRequest {
     let cSeq: Int
 }
 
+// swiftlint:disable:next type_body_length
 final class AirPlayConnectionHandler: @unchecked Sendable {
     var onMirroringStarted: ((String) -> Void)?
     var onSessionEnded: (() -> Void)?
@@ -48,17 +49,17 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
             switch state {
             case .ready:
                 AppLogger.info("AirPlay connection ready", category: .airplay)
-                if !self.hasStartedReceiving {
-                    self.hasStartedReceiving = true
-                    self.scheduleIdleLog()
-                    self.receive()
+                if !hasStartedReceiving {
+                    hasStartedReceiving = true
+                    scheduleIdleLog()
+                    receive()
                 }
-            case .failed(let error):
+            case let .failed(error):
                 AppLogger.error("AirPlay connection failed: \(error.localizedDescription)", category: .airplay)
-                self.finish()
+                finish()
             case .cancelled:
-                self.finish()
-            case .waiting(let error):
+                finish()
+            case let .waiting(error):
                 AppLogger.warning("AirPlay connection waiting: \(String(describing: error))", category: .airplay)
             default:
                 break
@@ -73,40 +74,40 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
     }
 
     private func receive() {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 131072) { [weak self] content, _, isComplete, error in
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 131_072) { [weak self] content, _, isComplete, error in
             guard let self else { return }
 
             if let content, !content.isEmpty {
-                self.cancelIdleLog()
-                if !self.didLogFirstBytes {
-                    self.didLogFirstBytes = true
+                cancelIdleLog()
+                if !didLogFirstBytes {
+                    didLogFirstBytes = true
                     let preview = content.prefix(48).map { String(format: "%02x", $0) }.joined(separator: " ")
                     AppLogger.info("AirPlay first bytes (\(content.count)B): \(preview)", category: .airplay)
                     if let text = String(data: content.prefix(120), encoding: .utf8), text.contains("RTSP") || text.contains("GET") || text.contains("POST") {
                         AppLogger.info("AirPlay first line: \(text.split(separator: "\r\n").first ?? "")", category: .airplay)
                     }
                 }
-                self.buffer.append(content)
-                self.processBuffer()
+                buffer.append(content)
+                processBuffer()
             }
 
             if let error {
                 AppLogger.warning("AirPlay receive ended: \(error.localizedDescription)", category: .airplay)
-                self.finish()
+                finish()
                 return
             }
 
             if isComplete {
-                if self.buffer.isEmpty {
+                if buffer.isEmpty {
                     AppLogger.warning("AirPlay connection closed with no data", category: .airplay)
                 } else {
-                    AppLogger.warning("AirPlay connection closed with \(self.buffer.count) unparsed bytes", category: .airplay)
+                    AppLogger.warning("AirPlay connection closed with \(buffer.count) unparsed bytes", category: .airplay)
                 }
-                self.finish()
+                finish()
                 return
             }
 
-            self.receive()
+            receive()
         }
     }
 
@@ -146,7 +147,7 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
         let totalLength = bodyStart + contentLength
         guard buffer.count >= totalLength else { return nil }
 
-        let body = Data(buffer[bodyStart..<totalLength])
+        let body = Data(buffer[bodyStart ..< totalLength])
         buffer.removeSubrange(..<totalLength)
 
         let cSeq = Int(headers["cseq"] ?? "0") ?? 0
@@ -208,7 +209,7 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
             status: "200 OK",
             headers: [
                 "Content-Type": "application/octet-stream",
-                "Content-Length": "32"
+                "Content-Length": "32",
             ],
             body: identity.publicKeyData,
             cSeq: cSeq
@@ -217,8 +218,8 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
 
     private func handlePairVerify(body: Data, cSeq: Int) {
         if body.count == 68, body.prefix(4) == Data([1, 0, 0, 0]) {
-            let clientECDH = body.subdata(in: 4..<36)
-            let clientEd25519 = body.subdata(in: 36..<68)
+            let clientECDH = body.subdata(in: 4 ..< 36)
+            let clientEd25519 = body.subdata(in: 36 ..< 68)
             clientEd25519PublicKey = clientEd25519
             clientECDHPublicKey = clientECDH
 
@@ -238,7 +239,7 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
                     status: "200 OK",
                     headers: [
                         "Content-Type": "application/octet-stream",
-                        "Content-Length": "\(responseBody.count)"
+                        "Content-Length": "\(responseBody.count)",
                     ],
                     body: responseBody,
                     cSeq: cSeq
@@ -254,8 +255,9 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
            body.prefix(4) == Data([0, 0, 0, 0]),
            let ecdhPrivate = ecdhPrivateKey,
            let clientECDH = clientECDHPublicKey,
-           let clientEd25519 = clientEd25519PublicKey {
-            let encryptedSignature = body.subdata(in: 4..<68)
+           let clientEd25519 = clientEd25519PublicKey
+        {
+            let encryptedSignature = body.subdata(in: 4 ..< 68)
             do {
                 let shared = try AirPlayCrypto.sharedSecret(serverPrivateKey: ecdhPrivate, clientPublicKeyData: clientECDH)
                 let (aesKey, aesIV) = AirPlayCrypto.derivePairVerifyKeyIV(sharedSecret: shared)
@@ -274,7 +276,7 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
                 status: "200 OK",
                 headers: [
                     "Content-Type": "application/octet-stream",
-                    "Content-Length": "0"
+                    "Content-Length": "0",
                 ],
                 body: Data(),
                 cSeq: cSeq
@@ -309,7 +311,7 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
             status: "200 OK",
             headers: [
                 "Content-Type": "application/octet-stream",
-                "Content-Length": "\(response.count)"
+                "Content-Length": "\(response.count)",
             ],
             body: response,
             cSeq: cSeq
@@ -317,14 +319,14 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
     }
 
     private func handlePairPinStart(cSeq: Int) {
-        let pin = Int.random(in: 0...9999)
+        let pin = Int.random(in: 0 ... 9999)
         DispatchQueue.main.async {
             AirPlayPairingState.shared.publishPIN(pin)
         }
         respondOK(cSeq: cSeq, body: Data())
     }
 
-    private func handlePairSetupPin(body: Data, cSeq: Int) {
+    private func handlePairSetupPin(body _: Data, cSeq: Int) {
         AppLogger.warning("pair-setup-pin requested but SRP pairing is not implemented yet", category: .airplay)
         respondError(cSeq: cSeq, code: 501, message: "Not Implemented")
     }
@@ -337,13 +339,14 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
             if hasPlistContentType, !body.isEmpty {
                 if let plist = try PropertyListSerialization.propertyList(from: body, format: nil) as? [String: Any],
                    let qualifier = plist["qualifier"] as? [String],
-                   qualifier.first == "txtAirPlay" {
+                   qualifier.first == "txtAirPlay"
+                {
                     let bodyData = try identity.txtAirPlayInfoPlistData()
                     sendResponse(
                         status: "200 OK",
                         headers: [
                             "Content-Type": "application/x-apple-binary-plist",
-                            "Content-Length": "\(bodyData.count)"
+                            "Content-Length": "\(bodyData.count)",
                         ],
                         body: bodyData,
                         cSeq: cSeq
@@ -358,7 +361,7 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
                     status: "200 OK",
                     headers: [
                         "Content-Type": "application/x-apple-binary-plist",
-                        "Content-Length": "\(bodyData.count)"
+                        "Content-Length": "\(bodyData.count)",
                     ],
                     body: bodyData,
                     cSeq: cSeq
@@ -371,7 +374,7 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
                 status: "200 OK",
                 headers: [
                     "Content-Type": "application/x-apple-binary-plist",
-                    "Content-Length": "\(bodyData.count)"
+                    "Content-Length": "\(bodyData.count)",
                 ],
                 body: bodyData,
                 cSeq: cSeq
@@ -385,7 +388,7 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
         sendResponse(
             status: "200 OK",
             headers: [
-                "Public": "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, GET"
+                "Public": "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, GET",
             ],
             body: Data(),
             cSeq: cSeq
@@ -403,7 +406,7 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
                 status: "200 OK",
                 headers: [
                     "Session": rtspSessionID,
-                    "Transport": "RTP/AVP/TCP;unicast;interleaved=0-1;mode=event;server_port=\(port);control_port=\(port)"
+                    "Transport": "RTP/AVP/TCP;unicast;interleaved=0-1;mode=event;server_port=\(port);control_port=\(port)",
                 ],
                 body: Data(),
                 cSeq: request.cSeq
@@ -424,7 +427,7 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
                 headers: [
                     "Session": rtspSessionID,
                     "Content-Type": "application/x-apple-binary-plist",
-                    "Content-Length": "\(responseBody.count)"
+                    "Content-Length": "\(responseBody.count)",
                 ],
                 body: responseBody,
                 cSeq: request.cSeq
@@ -445,7 +448,8 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
         if let eKey = root["ekey"] as? Data,
            let eIV = root["eiv"] as? Data,
            eKey.count == 72,
-           eIV.count == 16 {
+           eIV.count == 16
+        {
             guard let decryptedKey = AirPlayFairPlaySession.shared.decryptKey(eKey) else {
                 throw SetupError.keyDecryptionFailed
             }
@@ -493,7 +497,7 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
                     sessionIsActive = true
                     responseStreams.append([
                         "dataPort": Int(mirrorPort),
-                        "type": 110
+                        "type": 110,
                     ])
                     AppLogger.info(
                         "Mirroring stream configured on port \(mirrorPort), streamConnectionID=\(streamConnectionID)",
@@ -522,10 +526,10 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
 
         var errorDescription: String? {
             switch self {
-            case .invalidPlist: return "Invalid SETUP plist"
-            case .keyDecryptionFailed: return "FairPlay key decryption failed"
-            case .emptyResponse: return "No SETUP response fields"
-            case .mirrorServerUnavailable: return "Mirror video server could not start"
+            case .invalidPlist: "Invalid SETUP plist"
+            case .keyDecryptionFailed: "FairPlay key decryption failed"
+            case .emptyResponse: "No SETUP response fields"
+            case .mirrorServerUnavailable: "Mirror video server could not start"
             }
         }
     }
@@ -545,7 +549,7 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
                 status: "200 OK",
                 headers: [
                     "Content-Type": "text/parameters",
-                    "Content-Length": "\(body.count)"
+                    "Content-Length": "\(body.count)",
                 ],
                 body: body,
                 cSeq: request.cSeq
@@ -559,13 +563,13 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
     private func plistUInt64(_ value: Any?) -> UInt64? {
         switch value {
         case let number as NSNumber:
-            return number.uint64Value
+            number.uint64Value
         case let value as UInt64:
-            return value
+            value
         case let value as Int:
-            return UInt64(value)
+            UInt64(value)
         default:
-            return nil
+            nil
         }
     }
 
@@ -574,7 +578,7 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
             status: "200 OK",
             headers: [
                 "Audio-Latency": "11025",
-                "Audio-Jack-Status": "connected; type=analog"
+                "Audio-Jack-Status": "connected; type=analog",
             ],
             body: Data(),
             cSeq: cSeq
@@ -620,7 +624,7 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
 
     private func scheduleIdleLog() {
         let work = DispatchWorkItem { [weak self] in
-            guard let self, !self.isFinished, self.buffer.isEmpty else { return }
+            guard let self, !self.isFinished, buffer.isEmpty else { return }
             AppLogger.warning("AirPlay connection idle after ready (no RTSP data yet)", category: .airplay)
         }
         idleTimer?.cancel()

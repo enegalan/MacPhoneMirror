@@ -29,6 +29,27 @@ swift test
 swift run MacPhoneMirror
 ```
 
+### Linting & Formatting
+
+The project uses **SwiftLint** (linting) and **SwiftFormat** (formatting). Install them once with Homebrew:
+
+```bash
+brew install swiftlint swiftformat
+```
+
+Then use the provided `Makefile` targets:
+
+```bash
+make lint            # Run SwiftLint
+make format          # Reformat all Swift code with SwiftFormat
+make format-lint     # Format, then lint
+make check           # Lint + verify formatting (read-only) — CI-friendly
+```
+
+Before submitting changes, run `make check` to confirm the code is clean and correctly formatted.
+
+Configuration lives in `.swiftlint.yml` and `.swiftformat`. Both tools read these files automatically when invoked from the repo root.
+
 ---
 
 ## Coding Standards

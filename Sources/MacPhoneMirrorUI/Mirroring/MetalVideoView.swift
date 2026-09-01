@@ -1,8 +1,8 @@
-import SwiftUI
-import MetalKit
+import Combine
 import CoreVideo
 import MacPhoneMirrorCore
-import Combine
+import MetalKit
+import SwiftUI
 
 public struct MetalVideoView: NSViewRepresentable {
     @ObservedObject var stateHolder: MetalViewStateHolder
@@ -11,7 +11,7 @@ public struct MetalVideoView: NSViewRepresentable {
         self.stateHolder = stateHolder
     }
 
-    public func makeNSView(context: Context) -> MTKView {
+    public func makeNSView(context _: Context) -> MTKView {
         let mtkView = MTKView()
         mtkView.device = stateHolder.renderer?.device ?? MTLCreateSystemDefaultDevice()
         mtkView.colorPixelFormat = .bgra8Unorm
@@ -25,7 +25,7 @@ public struct MetalVideoView: NSViewRepresentable {
         return mtkView
     }
 
-    public func updateNSView(_ nsView: MTKView, context: Context) {
+    public func updateNSView(_ nsView: MTKView, context _: Context) {
         if nsView.delegate !== stateHolder.renderer {
             nsView.delegate = stateHolder.renderer
         }
@@ -53,9 +53,9 @@ public final class MetalViewStateHolder: ObservableObject, @unchecked Sendable {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] frame in
                 guard let self else { return }
-                self.renderer?.render(frame)
-                if !self.didLogFirstRender {
-                    self.didLogFirstRender = true
+                renderer?.render(frame)
+                if !didLogFirstRender {
+                    didLogFirstRender = true
                     AppLogger.info(
                         "Metal UI received frame (\(frame.width)x\(frame.height))",
                         category: .airplay
@@ -65,7 +65,8 @@ public final class MetalViewStateHolder: ObservableObject, @unchecked Sendable {
             .store(in: &cancellables)
 
         if let networkReceiver = receiver as? NetworkStreamReceiver,
-           let latestFrame = networkReceiver.latestVideoFrame() {
+           let latestFrame = networkReceiver.latestVideoFrame()
+        {
             DispatchQueue.main.async { [weak self] in
                 self?.renderer?.render(latestFrame)
             }

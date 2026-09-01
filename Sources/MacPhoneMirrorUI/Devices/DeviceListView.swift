@@ -1,14 +1,14 @@
-import SwiftUI
 import MacPhoneMirrorCore
+import SwiftUI
 
 public struct DeviceListView: View {
     public let devices: [PhoneDevice]
     public let activeState: ConnectionState
     public let onSelectDevice: (PhoneDevice) -> Void
     public let onRefresh: () -> Void
-    
+
     @State private var showingPairingGuide = false
-    
+
     public init(
         devices: [PhoneDevice],
         activeState: ConnectionState,
@@ -20,7 +20,7 @@ public struct DeviceListView: View {
         self.onSelectDevice = onSelectDevice
         self.onRefresh = onRefresh
     }
-    
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
@@ -31,14 +31,14 @@ public struct DeviceListView: View {
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
-                
+
                 Spacer()
-                
+
                 Button(action: onRefresh) {
                     Label("Scan Again", systemImage: "arrow.clockwise")
                 }
                 .buttonStyle(.bordered)
-                
+
                 Button(action: { showingPairingGuide = true }) {
                     Label("Pairing Guide", systemImage: "questionmark.circle")
                 }
@@ -46,7 +46,7 @@ public struct DeviceListView: View {
             }
             .padding(.horizontal, 24)
             .padding(.top, 24)
-            
+
             if devices.isEmpty {
                 emptyState
             } else {
@@ -65,7 +65,7 @@ public struct DeviceListView: View {
             PairingGuideView()
         }
     }
-    
+
     private var emptyState: some View {
         VStack(spacing: 16) {
             Spacer()
@@ -79,7 +79,7 @@ public struct DeviceListView: View {
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 380)
-            
+
             Button("Scan for Devices", action: onRefresh)
                 .buttonStyle(.borderedProminent)
                 .padding(.top, 8)
@@ -87,10 +87,10 @@ public struct DeviceListView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    
+
     private func deviceRow(for device: PhoneDevice) -> some View {
         let isConnected = activeState.activeDevice?.id == device.id
-        
+
         return MacCard {
             HStack(spacing: 16) {
                 ZStack {
@@ -101,7 +101,7 @@ public struct DeviceListView: View {
                         .font(.system(size: 24))
                         .foregroundColor(.accentColor)
                 }
-                
+
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
                         Text(device.name)
@@ -110,7 +110,7 @@ public struct DeviceListView: View {
                             StatusBadge(state: activeState)
                         }
                     }
-                    
+
                     HStack(spacing: 12) {
                         Label(device.model.rawValue, systemImage: "info.circle")
                         Label(device.connectionType.rawValue, systemImage: device.connectionType.iconName)
@@ -121,9 +121,9 @@ public struct DeviceListView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 }
-                
+
                 Spacer()
-                
+
                 if isConnected {
                     Button(role: .destructive, action: {
                         SessionManager.shared.disconnect()

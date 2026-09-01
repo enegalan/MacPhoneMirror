@@ -1,22 +1,22 @@
-import Foundation
 import CoreGraphics
+import Foundation
 
 public enum DeviceConnectionType: String, Codable, Sendable, CaseIterable {
     case usb = "USB (High Speed)"
     case wifi = "Wi-Fi (AirPlay)"
     case bluetooth = "Bluetooth LE"
     case simulated = "Simulator / Test"
-    
+
     public var iconName: String {
         switch self {
         case .usb:
-            return "cable.connector"
+            "cable.connector"
         case .wifi:
-            return "wifi"
+            "wifi"
         case .bluetooth:
-            return "dot.radiowaves.left.and.right"
+            "dot.radiowaves.left.and.right"
         case .simulated:
-            return "macmini"
+            "macmini"
         }
     }
 }
@@ -31,7 +31,7 @@ public struct PhoneDevice: Identifiable, Hashable, Codable, Sendable {
     public var batteryLevel: Double? // 0.0 to 1.0
     public var osVersion: String?
     public var ipAddress: String?
-    
+
     public init(
         id: String = UUID().uuidString,
         name: String,
@@ -53,11 +53,11 @@ public struct PhoneDevice: Identifiable, Hashable, Codable, Sendable {
         self.osVersion = osVersion
         self.ipAddress = ipAddress
     }
-    
+
     public var screenSize: CGSize {
         model.pointSize
     }
-    
+
     public var aspectRatio: CGFloat {
         model.aspectRatio
     }
@@ -65,18 +65,18 @@ public struct PhoneDevice: Identifiable, Hashable, Codable, Sendable {
     public var supportsScreenMirroring: Bool {
         switch connectionType {
         case .usb, .wifi:
-            return true
+            true
         case .bluetooth, .simulated:
-            return false
+            false
         }
     }
 
     public var supportsWirelessDiscovery: Bool {
         switch connectionType {
         case .wifi, .bluetooth:
-            return true
+            true
         case .usb, .simulated:
-            return false
+            false
         }
     }
 

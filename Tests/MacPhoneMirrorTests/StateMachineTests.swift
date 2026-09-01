@@ -1,10 +1,10 @@
-import Testing
+@testable import MacPhoneMirrorCore
 import Combine
 import CoreGraphics
-@testable import MacPhoneMirrorCore
+import Testing
 
 struct StateMachineTests {
-    @Test func testConnectionStateTransitions() {
+    @Test func connectionStateTransitions() {
         var state = ConnectionState.disconnected
         #expect(!state.isConnectedOrMirroring)
         #expect(state.activeDevice == nil)
@@ -22,7 +22,7 @@ struct StateMachineTests {
         #expect(!state.isConnectedOrMirroring)
     }
 
-    @Test func testDeviceOrientationHelpers() {
+    @Test func deviceOrientationHelpers() {
         let portrait = DeviceOrientation.portrait
         #expect(portrait.isPortrait)
         #expect(!portrait.isLandscape)
@@ -39,7 +39,7 @@ struct StateMachineTests {
         #expect(oriented.height == 393)
     }
 
-    @Test func testMirrorSessionOpenCloseCycle() async {
+    @Test func mirrorSessionOpenCloseCycle() {
         let manager = SessionManager()
         let device = PhoneDevice(
             id: "test-device-1",
@@ -82,7 +82,7 @@ struct StateMachineTests {
         #expect(closed == [sessionID])
     }
 
-    @Test func testAirPlaySessionReplacementClosesPreviousWindow() {
+    @Test func airPlaySessionReplacementClosesPreviousWindow() {
         let manager = SessionManager()
         let first = PhoneDevice(id: "airplay-A", name: "Phone A", connectionType: .wifi)
         let second = PhoneDevice(id: "airplay-B", name: "Phone B", connectionType: .wifi)

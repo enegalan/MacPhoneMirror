@@ -1,31 +1,31 @@
-import Foundation
 import AVFoundation
 import Combine
+import Foundation
 
 public final class USBDeviceDiscovery: NSObject, DeviceDiscovery, @unchecked Sendable {
     private let devicesSubject = CurrentValueSubject<[PhoneDevice], Never>([])
     private let lock = NSLock()
     private var _isScanning: Bool = false
     private var notificationObservers: [NSObjectProtocol] = []
-    
+
     public var devices: [PhoneDevice] {
         devicesSubject.value
     }
-    
+
     public var devicesPublisher: AnyPublisher<[PhoneDevice], Never> {
         devicesSubject.eraseToAnyPublisher()
     }
-    
+
     public var isScanning: Bool {
         lock.lock()
         defer { lock.unlock() }
         return _isScanning
     }
-    
-    public override init() {
+
+    override public init() {
         super.init()
     }
-    
+
     public func start() {
         lock.lock()
         guard !_isScanning else {
@@ -34,9 +34,9 @@ public final class USBDeviceDiscovery: NSObject, DeviceDiscovery, @unchecked Sen
         }
         _isScanning = true
         lock.unlock()
-        
+
         AppLogger.info("Starting USB Device Discovery via AVFoundation", category: .device)
-        
+
         let obs1 = NotificationCenter.default.addObserver(
             forName: AVCaptureDevice.wasConnectedNotification,
             object: nil,
@@ -44,7 +44,7 @@ public final class USBDeviceDiscovery: NSObject, DeviceDiscovery, @unchecked Sen
         ) { [weak self] _ in
             self?.refreshDevices()
         }
-        
+
         let obs2 = NotificationCenter.default.addObserver(
             forName: AVCaptureDevice.wasDisconnectedNotification,
             object: nil,
@@ -52,23 +52,23 @@ public final class USBDeviceDiscovery: NSObject, DeviceDiscovery, @unchecked Sen
         ) { [weak self] _ in
             self?.refreshDevices()
         }
-        
+
         notificationObservers = [obs1, obs2]
         refreshDevices()
     }
-    
+
     public func stop() {
         lock.lock()
         _isScanning = false
         lock.unlock()
-        
+
         for observer in notificationObservers {
             NotificationCenter.default.removeObserver(observer)
         }
         notificationObservers.removeAll()
         AppLogger.info("Stopped USB Device Discovery", category: .device)
     }
-    
+
     public func refreshDevices() {
         let discovery = AVCaptureDevice.DiscoverySession(
             deviceTypes: [.external],
@@ -93,7 +93,7 @@ public final class USBDeviceDiscovery: NSObject, DeviceDiscovery, @unchecked Sen
 
         devicesSubject.send(discovered)
     }
-    
+
     private func mapNameToModel(_ name: String) -> PhoneModel {
         for model in PhoneModel.allCases {
             if name.contains(model.rawValue) {

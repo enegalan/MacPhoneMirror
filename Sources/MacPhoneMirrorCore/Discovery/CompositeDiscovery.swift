@@ -1,9 +1,9 @@
-import Foundation
 import Combine
+import Foundation
 
 public final class CompositeDiscovery: ObservableObject, DeviceDiscovery, @unchecked Sendable {
     public static let shared = CompositeDiscovery()
-    
+
     @Published public var devices: [PhoneDevice] = []
 
     private let usbDiscovery = USBDeviceDiscovery()
@@ -14,17 +14,17 @@ public final class CompositeDiscovery: ObservableObject, DeviceDiscovery, @unche
     private var cancellables = Set<AnyCancellable>()
     private let lock = NSLock()
     private var _isScanning: Bool = false
-    
+
     public var devicesPublisher: AnyPublisher<[PhoneDevice], Never> {
         devicesSubject.eraseToAnyPublisher()
     }
-    
+
     public var isScanning: Bool {
         lock.lock()
         defer { lock.unlock() }
         return _isScanning
     }
-    
+
     public init() {
         Publishers.CombineLatest3(
             usbDiscovery.devicesPublisher,
@@ -41,29 +41,29 @@ public final class CompositeDiscovery: ObservableObject, DeviceDiscovery, @unche
         }
         .store(in: &cancellables)
     }
-    
+
     public func start() {
         lock.lock()
         _isScanning = true
         lock.unlock()
-        
+
         usbDiscovery.start()
         bonjourDiscovery.start()
         bluetoothDiscovery.start()
-        
+
         AppLogger.info("Composite Device Discovery active", category: .device)
     }
-    
+
     public func stop() {
         lock.lock()
         _isScanning = false
         lock.unlock()
-        
+
         usbDiscovery.stop()
         bonjourDiscovery.stop()
         bluetoothDiscovery.stop()
     }
-    
+
     public func refresh() {
         usbDiscovery.refreshDevices()
     }

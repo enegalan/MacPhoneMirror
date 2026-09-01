@@ -1,5 +1,5 @@
-import Foundation
 import AVFoundation
+import Foundation
 
 enum DeviceDiscoveryFilter {
     private static let cameraNameTokens = ["cámara", "camera", "facetime", "continuity", "webcam"]
@@ -43,8 +43,9 @@ enum DeviceDiscoveryFilter {
     static func normalizedDeviceKey(from name: String) -> String {
         if let start = name.firstIndex(of: "\""),
            let end = name.lastIndex(of: "\""),
-           start < end {
-            let extracted = String(name[name.index(after: start)..<end])
+           start < end
+        {
+            let extracted = String(name[name.index(after: start) ..< end])
             if !extracted.isEmpty {
                 return extracted.lowercased()
             }

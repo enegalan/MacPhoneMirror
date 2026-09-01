@@ -7,7 +7,7 @@ public struct AssistiveTouchAction: Identifiable, Sendable {
     public let event: PhoneInputEvent
     public let shortcutHint: String
     public let description: String
-    
+
     public init(id: String, title: String, systemImage: String, event: PhoneInputEvent, shortcutHint: String, description: String) {
         self.id = id
         self.title = title
@@ -83,6 +83,6 @@ public struct AssistiveTouchProfile: Sendable {
             event: .volumeDown,
             shortcutHint: "F11",
             description: "Decrease iOS audio volume"
-        )
+        ),
     ]
 }

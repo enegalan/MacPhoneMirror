@@ -1,5 +1,5 @@
-import SwiftUI
 import MacPhoneMirrorCore
+import SwiftUI
 
 public struct ControlConfigView: View {
     @State private var enableMouseControl = true
@@ -7,9 +7,9 @@ public struct ControlConfigView: View {
     @State private var mouseSensitivity: Double = 1.0
     @State private var scrollInvert = false
     @State private var showingAssistiveTouchGuide = false
-    
+
     public init() {}
-    
+
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -27,15 +27,15 @@ public struct ControlConfigView: View {
                     }
                     .buttonStyle(.borderedProminent)
                 }
-                
+
                 MacCard {
                     Text("Input Modes")
                         .font(.headline)
-                    
+
                     Toggle("Enable Mouse & Trackpad Pointer Control", isOn: $enableMouseControl)
                     Toggle("Enable Hardware Keyboard Shortcuts (⌘H, ⌘Tab, etc.)", isOn: $enableKeyboardShortcuts)
                     Toggle("Invert Scroll Direction", isOn: $scrollInvert)
-                    
+
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("Pointer Sensitivity")
@@ -43,14 +43,14 @@ public struct ControlConfigView: View {
                             Text(String(format: "%.1fx", mouseSensitivity))
                                 .foregroundColor(.secondary)
                         }
-                        Slider(value: $mouseSensitivity, in: 0.5...2.5, step: 0.1)
+                        Slider(value: $mouseSensitivity, in: 0.5 ... 2.5, step: 0.1)
                     }
                 }
-                
+
                 MacCard {
                     Text("Configured iOS Shortcuts")
                         .font(.headline)
-                    
+
                     VStack(spacing: 8) {
                         ForEach(AssistiveTouchProfile.standardActions) { action in
                             HStack {
@@ -79,9 +79,9 @@ public struct ControlConfigView: View {
 
 public struct AssistiveTouchGuideView: View {
     @Environment(\.dismiss) private var dismiss
-    
+
     public init() {}
-    
+
     public var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -92,15 +92,15 @@ public struct AssistiveTouchGuideView: View {
                     .buttonStyle(.borderedProminent)
             }
             .padding(20)
-            
+
             Divider()
-            
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     Text("Apple's iOS Security Model strictly forbids external apps from injecting touches without user-approved accessibility pointer devices. Follow these steps:")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
-                    
+
                     guideStep(1, "Open iOS Settings", "On your iPhone, open the standard Settings app.")
                     guideStep(2, "Navigate to Accessibility", "Tap Accessibility > Touch > AssistiveTouch.")
                     guideStep(3, "Enable AssistiveTouch", "Turn the main toggle ON. You will see the circular touch button.")
@@ -112,7 +112,7 @@ public struct AssistiveTouchGuideView: View {
         }
         .frame(width: 540, height: 440)
     }
-    
+
     private func guideStep(_ num: Int, _ title: String, _ desc: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Text("\(num)")

@@ -1,0 +1,23 @@
+# SwiftFormat configuration for MacPhoneMirror
+#
+# Docs: https://github.com/nicklockwood/SwiftFormat
+# Install: brew install swiftformat
+
+--indent 4
+--tab-width 4
+--linebreaks lf
+--strip-unused-args always
+--self remove
+--semicolons never
+--header ignore
+
+# Import ordering
+--import-grouping alpha,testable-first
+
+# Project language version
+--swift-version 6.0
+
+# Excluded paths
+--exclude .build
+--exclude Sources/CAirPlayFairPlay
+--exclude Sources/MacPlayMirrorCore

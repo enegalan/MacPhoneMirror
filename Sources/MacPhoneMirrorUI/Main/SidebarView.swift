@@ -1,21 +1,23 @@
-import SwiftUI
 import MacPhoneMirrorCore
+import SwiftUI
 
 public enum AppNavigationTab: String, CaseIterable, Identifiable {
     case mirror = "Mirroring"
     case control = "Control"
     case settings = "Settings"
 
-    public var id: String { rawValue }
+    public var id: String {
+        rawValue
+    }
 
     public var icon: String {
         switch self {
         case .mirror:
-            return "display"
+            "display"
         case .control:
-            return "cursorarrow.motionlines"
+            "cursorarrow.motionlines"
         case .settings:
-            return "gearshape"
+            "gearshape"
         }
     }
 }
@@ -32,7 +34,7 @@ public struct SidebarView: View {
         sessions: [MirrorSession] = [],
         onFocusSession: @escaping (String) -> Void = { _ in }
     ) {
-        self._selectedTab = selectedTab
+        _selectedTab = selectedTab
         self.activeState = activeState
         self.sessions = sessions
         self.onFocusSession = onFocusSession

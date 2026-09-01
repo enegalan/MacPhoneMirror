@@ -1,5 +1,5 @@
-import Foundation
 import CryptoKit
+import Foundation
 import Network
 
 struct AirPlayIdentity {
@@ -20,7 +20,7 @@ struct AirPlayIdentity {
     }
 
     var combinedFeatures: UInt64 {
-        0x527FFEE6
+        0x527F_FEE6
     }
 
     private static let deviceIDKey = "airplay.deviceid"
@@ -33,7 +33,8 @@ struct AirPlayIdentity {
         if let deviceID = defaults.string(forKey: deviceIDKey),
            let privateKeyData = defaults.data(forKey: privateKeyKey),
            let pairingID = defaults.string(forKey: pairingIDKey),
-           let privateKey = try? Curve25519.Signing.PrivateKey(rawRepresentation: privateKeyData) {
+           let privateKey = try? Curve25519.Signing.PrivateKey(rawRepresentation: privateKeyData)
+        {
             return AirPlayIdentity(deviceID: deviceID, pairingID: pairingID, signingPrivateKey: privateKey)
         }
 
@@ -66,7 +67,7 @@ struct AirPlayIdentity {
             "igl=0",
             "acl=0",
             "rsf=0x0",
-            "fn=\(AirPlayTXTRecordBuilder.serviceName)"
+            "fn=\(AirPlayTXTRecordBuilder.serviceName)",
         ]
 
         var data = Data()
@@ -80,7 +81,7 @@ struct AirPlayIdentity {
 
     func txtAirPlayInfoPlistData() throws -> Data {
         let plist: [String: Any] = [
-            "txtAirPlay": encodedTXTRecord()
+            "txtAirPlay": encodedTXTRecord(),
         ]
         return try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0)
     }
@@ -94,7 +95,7 @@ struct AirPlayIdentity {
             "refreshRate": 60,
             "maxFPS": 60,
             "overscanned": false,
-            "uuid": pairingID
+            "uuid": pairingID,
         ]
         let plist: [String: Any] = [
             "deviceID": deviceID,
@@ -109,7 +110,7 @@ struct AirPlayIdentity {
             "keepAliveLowPower": true,
             "keepAliveSendStatsAsBody": true,
             "macAddress": deviceID,
-            "displays": [display]
+            "displays": [display],
         ]
         return try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0)
     }

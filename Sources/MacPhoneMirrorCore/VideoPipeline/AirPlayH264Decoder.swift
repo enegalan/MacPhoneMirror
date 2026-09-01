@@ -1,7 +1,7 @@
-import Foundation
 import CoreMedia
-import VideoToolbox
+import Foundation
 import QuartzCore
+import VideoToolbox
 
 final class AirPlayH264Decoder: @unchecked Sendable {
     weak var delegate: VideoDecoderDelegate?
@@ -57,12 +57,12 @@ final class AirPlayH264Decoder: @unchecked Sendable {
         offset += 1
 
         var parameterSets: [Data] = []
-        for _ in 0..<spsCount {
+        for _ in 0 ..< spsCount {
             guard offset + 2 <= bytes.count else { return }
             let length = Int(bytes[offset]) << 8 | Int(bytes[offset + 1])
             offset += 2
             guard length > 0, offset + length <= bytes.count else { return }
-            parameterSets.append(Data(bytes[offset..<(offset + length)]))
+            parameterSets.append(Data(bytes[offset ..< (offset + length)]))
             offset += length
         }
 
@@ -70,12 +70,12 @@ final class AirPlayH264Decoder: @unchecked Sendable {
         let ppsCount = Int(bytes[offset])
         offset += 1
 
-        for _ in 0..<ppsCount {
+        for _ in 0 ..< ppsCount {
             guard offset + 2 <= bytes.count else { return }
             let length = Int(bytes[offset]) << 8 | Int(bytes[offset + 1])
             offset += 2
             guard length > 0, offset + length <= bytes.count else { return }
-            parameterSets.append(Data(bytes[offset..<(offset + length)]))
+            parameterSets.append(Data(bytes[offset ..< (offset + length)]))
             offset += length
         }
 
@@ -97,7 +97,7 @@ final class AirPlayH264Decoder: @unchecked Sendable {
             return
         }
 
-        let sps = Data(bytes[8..<(8 + spsSize)])
+        let sps = Data(bytes[8 ..< (8 + spsSize)])
         let ppsSizeOffset = spsSize + 9
         let ppsSize = Int(bytes[ppsSizeOffset]) << 8 | Int(bytes[ppsSizeOffset + 1])
         let ppsStart = spsSize + 11
@@ -106,7 +106,7 @@ final class AirPlayH264Decoder: @unchecked Sendable {
             return
         }
 
-        let pps = Data(bytes[ppsStart..<(ppsStart + ppsSize)])
+        let pps = Data(bytes[ppsStart ..< (ppsStart + ppsSize)])
         pendingParameterSets = encodeAVCCNALs([sps, pps])
 
         if sps == lastSPS, pps == lastPPS, formatDescription != nil {
@@ -200,7 +200,7 @@ final class AirPlayH264Decoder: @unchecked Sendable {
                 guard let spsBase = spsBytes.baseAddress, let ppsBase = ppsBytes.baseAddress else { return }
                 var pointers: [UnsafePointer<UInt8>] = [
                     spsBase.assumingMemoryBound(to: UInt8.self),
-                    ppsBase.assumingMemoryBound(to: UInt8.self)
+                    ppsBase.assumingMemoryBound(to: UInt8.self),
                 ]
                 var sizes = [sps.count, pps.count]
                 status = CMVideoFormatDescriptionCreateFromH264ParameterSets(
@@ -232,7 +232,7 @@ final class AirPlayH264Decoder: @unchecked Sendable {
                 | Int(bytes[offset + 3])
             offset += 4
             guard length > 0, offset + length <= bytes.count else { break }
-            nals.append(Data(bytes[offset..<(offset + length)]))
+            nals.append(Data(bytes[offset ..< (offset + length)]))
             offset += length
         }
 

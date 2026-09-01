@@ -1,6 +1,6 @@
-import SwiftUI
-import MacPhoneMirrorCore
 import Combine
+import MacPhoneMirrorCore
+import SwiftUI
 
 public struct MainWindowView: View {
     @State private var selectedTab: AppNavigationTab = .mirror
@@ -63,13 +63,12 @@ public struct MainWindowView: View {
         }
     }
 
+    @ViewBuilder
     private var hubMirrorContent: some View {
-        Group {
-            if case .failed(let message) = sessionManager.state {
-                connectionErrorView(message: message)
-            } else {
-                waitingForAirPlayView
-            }
+        if case let .failed(message) = sessionManager.state {
+            connectionErrorView(message: message)
+        } else {
+            waitingForAirPlayView
         }
     }
 

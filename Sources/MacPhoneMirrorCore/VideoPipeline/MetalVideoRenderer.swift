@@ -1,8 +1,8 @@
+import CoreGraphics
+import CoreVideo
 import Foundation
 import Metal
 import MetalKit
-import CoreVideo
-import CoreGraphics
 
 public protocol VideoRenderer: AnyObject, Sendable {
     func render(_ frame: VideoFrame)
@@ -17,23 +17,24 @@ public final class MetalVideoRenderer: NSObject, VideoRenderer, MTKViewDelegate,
     private let renderLock = NSLock()
     private var renderPipelineState: MTLRenderPipelineState?
     private var didLogFirstDraw = false
-    
+
     public init?(device: MTLDevice? = MTLCreateSystemDefaultDevice()) {
-        guard let device = device,
-              let queue = device.makeCommandQueue() else {
+        guard let device,
+              let queue = device.makeCommandQueue()
+        else {
             return nil
         }
         self.device = device
-        self.commandQueue = queue
+        commandQueue = queue
         super.init()
-        
+
         var cache: CVMetalTextureCache?
         CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, device, nil, &cache)
-        self.textureCache = cache
-        
+        textureCache = cache
+
         setupPipeline()
     }
-    
+
     private func setupPipeline() {
         let shaderSource = """
         #include <metal_stdlib>
@@ -72,31 +73,31 @@ public final class MetalVideoRenderer: NSObject, VideoRenderer, MTKViewDelegate,
             return texture.sample(linearSampler, in.texCoords);
         }
         """
-        
+
         do {
             let library = try device.makeLibrary(source: shaderSource, options: nil)
             let vertexFunction = library.makeFunction(name: "vertexShader")
             let fragmentFunction = library.makeFunction(name: "fragmentShader")
-            
+
             let pipelineDescriptor = MTLRenderPipelineDescriptor()
             pipelineDescriptor.vertexFunction = vertexFunction
             pipelineDescriptor.fragmentFunction = fragmentFunction
             pipelineDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
-            
-            self.renderPipelineState = try device.makeRenderPipelineState(descriptor: pipelineDescriptor)
+
+            renderPipelineState = try device.makeRenderPipelineState(descriptor: pipelineDescriptor)
         } catch {
             AppLogger.error("Failed to create Metal render pipeline: \(error.localizedDescription)", category: .airplay)
         }
     }
-    
+
     public func render(_ frame: VideoFrame) {
         let start = CFAbsoluteTimeGetCurrent()
         guard let cache = textureCache else { return }
-        
+
         let pixelBuffer = frame.pixelBuffer
         let width = CVPixelBufferGetWidth(pixelBuffer)
         let height = CVPixelBufferGetHeight(pixelBuffer)
-        
+
         var metalTextureOut: CVMetalTexture?
         let status = CVMetalTextureCacheCreateTextureFromImage(
             kCFAllocatorDefault,
@@ -109,15 +110,16 @@ public final class MetalVideoRenderer: NSObject, VideoRenderer, MTKViewDelegate,
             0,
             &metalTextureOut
         )
-        
-        if status == kCVReturnSuccess, let metalTextureOut = metalTextureOut,
-           let texture = CVMetalTextureGetTexture(metalTextureOut) {
+
+        if status == kCVReturnSuccess, let metalTextureOut,
+           let texture = CVMetalTextureGetTexture(metalTextureOut)
+        {
             renderLock.lock()
             // Keep CVMetalTexture alive; releasing it can invalidate the MTLTexture.
-            self.currentCVTexture = metalTextureOut
-            self.currentTexture = texture
+            currentCVTexture = metalTextureOut
+            currentTexture = texture
             renderLock.unlock()
-            
+
             let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000.0
             PerformanceMonitor.shared.recordRenderTime(elapsed)
             PerformanceMonitor.shared.recordFrameReceived(resolution: CGSize(width: width, height: height))
@@ -125,29 +127,31 @@ public final class MetalVideoRenderer: NSObject, VideoRenderer, MTKViewDelegate,
             AppLogger.warning("CVMetalTextureCacheCreateTextureFromImage failed: \(status)", category: .airplay)
         }
     }
-    
+
     // MARK: - MTKViewDelegate
-    public func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
-    
+
+    public func mtkView(_: MTKView, drawableSizeWillChange _: CGSize) {}
+
     public func draw(in view: MTKView) {
         renderLock.lock()
         let texture = currentTexture
         renderLock.unlock()
-        
-        guard let texture = texture,
+
+        guard let texture,
               let pipelineState = renderPipelineState,
               let currentRenderPassDescriptor = view.currentRenderPassDescriptor,
               let currentDrawable = view.currentDrawable,
               let commandBuffer = commandQueue.makeCommandBuffer(),
-              let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: currentRenderPassDescriptor) else {
+              let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: currentRenderPassDescriptor)
+        else {
             return
         }
-        
+
         encoder.setRenderPipelineState(pipelineState)
         encoder.setFragmentTexture(texture, index: 0)
         encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
         encoder.endEncoding()
-        
+
         commandBuffer.present(currentDrawable)
         commandBuffer.commit()
 

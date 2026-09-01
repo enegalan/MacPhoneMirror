@@ -1,6 +1,6 @@
-import Foundation
 import CommonCrypto
 import CryptoKit
+import Foundation
 
 enum AirPlayMirrorCrypto {
     static func deriveMirrorKeys(streamConnectionID: UInt64, audioAESKey: Data) -> (key: Data, iv: Data) {
@@ -53,7 +53,7 @@ final class AirPlayMirrorDecryptor: @unchecked Sendable {
         let inputBytes = [UInt8](input)
 
         if nextDecryptCount > 0 {
-            for index in 0..<nextDecryptCount {
+            for index in 0 ..< nextDecryptCount {
                 output[index] = inputBytes[index] ^ overflow[(16 - nextDecryptCount) + index]
             }
         }
@@ -68,7 +68,7 @@ final class AirPlayMirrorDecryptor: @unchecked Sendable {
             var processed: size_t = 0
             let status = CCCryptorUpdate(
                 cryptor,
-                Array(inputBytes[bodyStart..<(bodyStart + encryptedLength)]),
+                Array(inputBytes[bodyStart ..< (bodyStart + encryptedLength)]),
                 encryptedLength,
                 &output[bodyStart],
                 encryptedLength,
@@ -84,7 +84,7 @@ final class AirPlayMirrorDecryptor: @unchecked Sendable {
         if restLength > 0 {
             let restStart = input.count - restLength
             overflow = [UInt8](repeating: 0, count: 16)
-            for index in 0..<restLength {
+            for index in 0 ..< restLength {
                 overflow[index] = inputBytes[restStart + index]
             }
 
@@ -95,7 +95,7 @@ final class AirPlayMirrorDecryptor: @unchecked Sendable {
             overflow = decryptedBlock
             blockOffset = 0
 
-            for index in 0..<restLength {
+            for index in 0 ..< restLength {
                 output[restStart + index] = decryptedBlock[index]
             }
             nextDecryptCount = 16 - restLength

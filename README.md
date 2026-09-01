@@ -1,5 +1,7 @@
 # MacPhoneMirror — macOS iPhone Screen Mirroring & Control
 
+[![CI](https://github.com/enegalan/MacPhoneMirror/actions/workflows/ci.yml/badge.svg)](https://github.com/enegalan/MacPhoneMirror/actions/workflows/ci.yml)
+
 <p align="center">
   <strong>See your iPhone. Control it from your Mac.</strong><br/>
   A high-performance, native macOS application for low-latency iPhone screen mirroring, realistic titanium device framing, and Mac-to-iPhone interaction.

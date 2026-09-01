@@ -1,7 +1,7 @@
-import Foundation
-import CoreVideo
 import CoreGraphics
 import CoreMedia
+import CoreVideo
+import Foundation
 
 public struct VideoFrame: @unchecked Sendable {
     public let pixelBuffer: CVPixelBuffer
@@ -9,7 +9,7 @@ public struct VideoFrame: @unchecked Sendable {
     public let orientation: DeviceOrientation
     public let frameIndex: UInt64
     public let captureTimestamp: DispatchTime
-    
+
     public init(
         pixelBuffer: CVPixelBuffer,
         presentationTimestamp: CMTime = .invalid,
@@ -23,19 +23,19 @@ public struct VideoFrame: @unchecked Sendable {
         self.frameIndex = frameIndex
         self.captureTimestamp = captureTimestamp
     }
-    
+
     public var width: Int {
         CVPixelBufferGetWidth(pixelBuffer)
     }
-    
+
     public var height: Int {
         CVPixelBufferGetHeight(pixelBuffer)
     }
-    
+
     public var size: CGSize {
         CGSize(width: width, height: height)
     }
-    
+
     public var pixelFormat: OSType {
         CVPixelBufferGetPixelFormatType(pixelBuffer)
     }

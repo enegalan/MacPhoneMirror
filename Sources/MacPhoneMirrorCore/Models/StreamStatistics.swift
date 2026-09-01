@@ -1,5 +1,5 @@
-import Foundation
 import CoreGraphics
+import Foundation
 
 public struct StreamStatistics: Sendable, Equatable {
     public var currentFPS: Double
@@ -12,7 +12,7 @@ public struct StreamStatistics: Sendable, Equatable {
     public var bitRateMbps: Double
     public var resolution: CGSize
     public var isHardwareAccelerated: Bool
-    
+
     public init(
         currentFPS: Double = 0.0,
         targetFPS: Double = 60.0,
@@ -36,7 +36,7 @@ public struct StreamStatistics: Sendable, Equatable {
         self.resolution = resolution
         self.isHardwareAccelerated = isHardwareAccelerated
     }
-    
+
     public var dropRatePercentage: Double {
         guard totalFrames > 0 else { return 0.0 }
         return (Double(droppedFrames) / Double(totalFrames + droppedFrames)) * 100.0

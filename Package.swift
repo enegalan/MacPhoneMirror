@@ -5,7 +5,7 @@ let package = Package(
     name: "MacPhoneMirror",
     defaultLocalization: "en",
     platforms: [
-        .macOS(.v14)
+        .macOS(.v14),
     ],
     products: [
         .executable(
@@ -19,7 +19,7 @@ let package = Package(
         .library(
             name: "MacPhoneMirrorUI",
             targets: ["MacPhoneMirrorUI"]
-        )
+        ),
     ],
     dependencies: [],
     targets: [
@@ -28,7 +28,7 @@ let package = Package(
             path: "Sources/CAirPlayFairPlay",
             publicHeadersPath: "include",
             cSettings: [
-                .headerSearchPath("playfair")
+                .headerSearchPath("playfair"),
             ]
         ),
         .target(
@@ -45,7 +45,7 @@ let package = Package(
             name: "MacPhoneMirror",
             dependencies: [
                 "MacPhoneMirrorCore",
-                "MacPhoneMirrorUI"
+                "MacPhoneMirrorUI",
             ],
             path: "Sources/MacPhoneMirror",
             exclude: ["Info.plist"],
@@ -54,17 +54,17 @@ let package = Package(
                     "-Xlinker", "-sectcreate",
                     "-Xlinker", "__TEXT",
                     "-Xlinker", "__info_plist",
-                    "-Xlinker", "Sources/MacPhoneMirror/Info.plist"
-                ], .when(platforms: [.macOS]))
+                    "-Xlinker", "Sources/MacPhoneMirror/Info.plist",
+                ], .when(platforms: [.macOS])),
             ]
         ),
         .testTarget(
             name: "MacPhoneMirrorTests",
             dependencies: [
                 "MacPhoneMirrorCore",
-                "MacPhoneMirrorUI"
+                "MacPhoneMirrorUI",
             ],
             path: "Tests/MacPhoneMirrorTests"
-        )
+        ),
     ]
 )
