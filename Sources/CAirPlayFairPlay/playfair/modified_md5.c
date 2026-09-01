@@ -34,7 +34,7 @@ uint32_t I(uint32_t B, uint32_t C, uint32_t D)
 
 uint32_t rol(uint32_t input, int count)
 {
-   return ((input << count) & 0xffffffff) | (input & 0xffffffff) >> (32-count);
+   return ((input << count) & 0xffffffffu) | ((input >> (32 - count)) & 0xffffffffu);
 }
 
 void swap(uint32_t* a, uint32_t* b)
