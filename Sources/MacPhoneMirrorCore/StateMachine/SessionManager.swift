@@ -1,6 +1,6 @@
-import Foundation
 import Combine
 import CoreGraphics
+import Foundation
 
 public final class SessionManager: ObservableObject, @unchecked Sendable {
     public static let shared = SessionManager()
@@ -8,7 +8,7 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
     @Published public var state: ConnectionState = .discovering
     @Published public var sessions: [MirrorSession] = []
     @Published public var orientation: DeviceOrientation = .portrait
-    @Published public var statistics: StreamStatistics = StreamStatistics()
+    @Published public var statistics: StreamStatistics = .init()
 
     public let sessionWindowOpenPublisher = PassthroughSubject<String, Never>()
     public let sessionWindowClosePublisher = PassthroughSubject<String, Never>()
@@ -283,12 +283,12 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
                 guard let self else { return }
 
                 if let usbDevice = devices.first {
-                    if self.connectedUSBDeviceID != usbDevice.id {
-                        self.connectedUSBDeviceID = usbDevice.id
+                    if connectedUSBDeviceID != usbDevice.id {
+                        connectedUSBDeviceID = usbDevice.id
                         Task { await self.connectUSB(usbDevice) }
                     }
                 } else {
-                    self.connectedUSBDeviceID = nil
+                    connectedUSBDeviceID = nil
                 }
             }
             .store(in: &cancellables)

@@ -1,9 +1,9 @@
-import Foundation
 import CoreGraphics
+import Foundation
 
 public final class PerformanceMonitor: @unchecked Sendable {
     public static let shared = PerformanceMonitor()
-    
+
     private let lock = NSLock()
     private var frameTimestamps: [Double] = []
     private var decodeTimes: [Double] = []
@@ -13,25 +13,25 @@ public final class PerformanceMonitor: @unchecked Sendable {
     private var lastFPSCalculationTime: Double = 0.0
     private var calculatedFPS: Double = 60.0
     private var currentBitRate: Double = 0.0
-    private var lastResolution: CGSize = CGSize(width: 1179, height: 2556)
+    private var lastResolution: CGSize = .init(width: 1179, height: 2556)
     private var targetFPS: Double = 60.0
-    
+
     public init() {}
-    
+
     public func recordFrameReceived(resolution: CGSize) {
         lock.lock()
         defer { lock.unlock() }
-        
+
         let now = CFAbsoluteTimeGetCurrent()
         frameTimestamps.append(now)
         totalFrames += 1
         lastResolution = resolution
-        
+
         // Retain only last 60 frame timestamps for moving average
         if frameTimestamps.count > 60 {
             frameTimestamps.removeFirst(frameTimestamps.count - 60)
         }
-        
+
         if now - lastFPSCalculationTime >= 0.5 {
             if frameTimestamps.count >= 2 {
                 let duration = frameTimestamps.last! - frameTimestamps.first!
@@ -42,7 +42,7 @@ public final class PerformanceMonitor: @unchecked Sendable {
             lastFPSCalculationTime = now
         }
     }
-    
+
     public func recordDecodeTime(_ timeMs: Double) {
         lock.lock()
         defer { lock.unlock() }
@@ -51,7 +51,7 @@ public final class PerformanceMonitor: @unchecked Sendable {
             decodeTimes.removeFirst(decodeTimes.count - 60)
         }
     }
-    
+
     public func recordRenderTime(_ timeMs: Double) {
         lock.lock()
         defer { lock.unlock() }
@@ -60,27 +60,27 @@ public final class PerformanceMonitor: @unchecked Sendable {
             renderTimes.removeFirst(renderTimes.count - 60)
         }
     }
-    
+
     public func recordDroppedFrame() {
         lock.lock()
         defer { lock.unlock() }
         droppedFrames += 1
     }
-    
+
     public func setTargetFPS(_ fps: Double) {
         lock.lock()
         defer { lock.unlock() }
         targetFPS = fps
     }
-    
+
     public func currentStatistics() -> StreamStatistics {
         lock.lock()
         defer { lock.unlock() }
-        
+
         let avgDecode = decodeTimes.isEmpty ? 2.4 : (decodeTimes.reduce(0, +) / Double(decodeTimes.count))
         let avgRender = renderTimes.isEmpty ? 1.2 : (renderTimes.reduce(0, +) / Double(renderTimes.count))
         let latency = avgDecode + avgRender + 8.5 // Estimated capture + hardware transport baseline
-        
+
         return StreamStatistics(
             currentFPS: calculatedFPS > 0 ? calculatedFPS : targetFPS,
             targetFPS: targetFPS,
@@ -94,7 +94,7 @@ public final class PerformanceMonitor: @unchecked Sendable {
             isHardwareAccelerated: true
         )
     }
-    
+
     public func reset() {
         lock.lock()
         defer { lock.unlock() }

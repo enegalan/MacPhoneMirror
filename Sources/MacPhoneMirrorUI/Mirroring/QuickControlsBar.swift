@@ -1,5 +1,5 @@
-import SwiftUI
 import MacPhoneMirrorCore
+import SwiftUI
 
 public struct QuickControlsBar: View {
     public let onHome: () -> Void

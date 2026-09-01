@@ -1,6 +1,6 @@
+import Darwin
 import Foundation
 import Network
-import Darwin
 
 final class AirPlayTimingServer: @unchecked Sendable {
     static let shared = AirPlayTimingServer()
@@ -151,16 +151,16 @@ final class AirPlayTimingServer: @unchecked Sendable {
 
     private static func hostString(from connection: NWConnection, interfaceName: String?) -> String? {
         let endpoint = connection.currentPath?.remoteEndpoint ?? connection.endpoint
-        guard case .hostPort(let host, _) = endpoint else { return nil }
+        guard case let .hostPort(host, _) = endpoint else { return nil }
 
         switch host {
-        case .ipv6(let ipv6):
+        case let .ipv6(ipv6):
             var hostText = "\(ipv6)"
             if hostText.hasPrefix("fe80"), let interfaceName, !hostText.contains("%") {
                 hostText += "%\(interfaceName)"
             }
             return hostText
-        case .ipv4(let ipv4):
+        case let .ipv4(ipv4):
             return "\(ipv4)"
         default:
             return nil
@@ -201,7 +201,7 @@ final class AirPlayTimingServer: @unchecked Sendable {
                     ptr.pointee.sin6_scope_id != 0
                 }
             }
-            if hostText.hasPrefix("fe80") && !scoped {
+            if hostText.hasPrefix("fe80"), !scoped {
                 AppLogger.warning("Link-local timing host missing scope id: \(hostText)", category: .airplay)
                 return false
             }
@@ -240,17 +240,17 @@ final class AirPlayTimingServer: @unchecked Sendable {
         guard isRunning, socketFD >= 0 else { return }
 
         var request: [UInt8] = [
-            0x80, 0xd2, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00,
+            0x80, 0xD2, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         ]
 
         let now = UInt64(Date().timeIntervalSince1970 * 1_000_000_000)
         let seconds = now / 1_000_000_000 + 0x83AA_7E80
         let fraction = (now % 1_000_000_000) << 32 / 1_000_000_000
         let timestamp = (seconds << 32) | fraction
-        for index in 0..<8 {
+        for index in 0 ..< 8 {
             request[24 + index] = UInt8((timestamp >> (56 - index * 8)) & 0xFF)
         }
 
@@ -284,7 +284,7 @@ final class AirPlayTimingServer: @unchecked Sendable {
             if received <= 0 {
                 break
             }
-            if received >= 32 && !didLogSendSuccess {
+            if received >= 32, !didLogSendSuccess {
                 didLogSendSuccess = true
                 AppLogger.info("Timing response received (\(received) bytes)", category: .airplay)
             }

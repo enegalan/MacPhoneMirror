@@ -1,8 +1,8 @@
+import Combine
+import CoreMedia
+import CoreVideo
 import Foundation
 import Network
-import Combine
-import CoreVideo
-import CoreMedia
 
 public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoDecoderDelegate, @unchecked Sendable {
     public static let shared = NetworkStreamReceiver()
@@ -38,11 +38,13 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
     public var isAdvertising: Bool {
         lock.lock()
         defer { lock.unlock() }
-        if case .running = _state { return true }
+        if case .running = _state {
+            return true
+        }
         return false
     }
 
-    private override init() {
+    override private init() {
         super.init()
         decoder.delegate = self
         AirPlayMirrorServer.shared.configureVideoPipeline(delegate: self)
@@ -60,7 +62,9 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
     private func isRunningState() -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        if case .running = _state { return true }
+        if case .running = _state {
+            return true
+        }
         return false
     }
 
@@ -117,20 +121,20 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
                 switch state {
                 case .ready:
                     if let actualPort = listener.port?.rawValue {
-                        self.advertisedPort = actualPort
+                        advertisedPort = actualPort
                     }
-                    self.setState(.running)
+                    setState(.running)
                     AppLogger.info(
-                        "AirPlay receiver advertising '\(AirPlayTXTRecordBuilder.serviceName)' on port \(self.advertisedPort)",
+                        "AirPlay receiver advertising '\(AirPlayTXTRecordBuilder.serviceName)' on port \(advertisedPort)",
                         category: .airplay
                     )
                     resumeOnce.complete()
-                case .failed(let error):
-                    self.setState(.failed(error.localizedDescription))
+                case let .failed(error):
+                    setState(.failed(error.localizedDescription))
                     AppLogger.error("AirPlay listener failed: \(error)", category: .airplay)
                     resumeOnce.fail(error)
                 case .cancelled:
-                    self.setState(.stopped)
+                    setState(.stopped)
                     resumeOnce.fail(CancellationError())
                 default:
                     break
@@ -209,7 +213,7 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
         AppLogger.info("AirPlay receiver stopped", category: .airplay)
     }
 
-    public func decoder(_ decoder: VideoDecoder, didOutputPixelBuffer pixelBuffer: CVPixelBuffer, presentationTime: CMTime) {
+    public func decoder(_: VideoDecoder, didOutputPixelBuffer pixelBuffer: CVPixelBuffer, presentationTime: CMTime) {
         let width = CVPixelBufferGetWidth(pixelBuffer)
         let height = CVPixelBufferGetHeight(pixelBuffer)
         let orientation: DeviceOrientation = width >= height ? .landscapeLeft : .portrait
@@ -257,7 +261,7 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
         return latestFrame
     }
 
-    public func decoder(_ decoder: VideoDecoder, didFailWithError error: Error) {
+    public func decoder(_: VideoDecoder, didFailWithError error: Error) {
         AppLogger.error("Video decoder error: \(error.localizedDescription)", category: .airplay)
     }
 }

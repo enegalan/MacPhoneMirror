@@ -1,7 +1,7 @@
-import Foundation
-import VideoToolbox
 import CoreMedia
 import CoreVideo
+import Foundation
+import VideoToolbox
 
 public protocol VideoDecoderDelegate: AnyObject, Sendable {
     func decoder(_ decoder: VideoDecoder, didOutputPixelBuffer pixelBuffer: CVPixelBuffer, presentationTime: CMTime)
@@ -14,30 +14,30 @@ public final class VideoDecoder: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.macphonemirror.videodecoder", qos: .userInteractive)
     private var didLogFirstPixelBuffer = false
     private var decodeErrorCount = 0
-    
+
     public weak var delegate: VideoDecoderDelegate?
-    
+
     public init() {}
-    
+
     deinit {
         invalidateSession()
     }
-    
+
     public func configure(with formatDesc: CMVideoFormatDescription) -> Bool {
-        self.formatDescription = formatDesc
+        formatDescription = formatDesc
         didLogFirstPixelBuffer = false
         decodeErrorCount = 0
         invalidateSession()
-        
+
         let destinationPixelBufferAttributes: [String: Any] = [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
             kCVPixelBufferMetalCompatibilityKey as String: true,
             kCVPixelBufferOpenGLCompatibilityKey as String: true,
-            kCVPixelBufferIOSurfacePropertiesKey as String: [:]
+            kCVPixelBufferIOSurfacePropertiesKey as String: [:],
         ]
-        
+
         var outputCallback = VTDecompressionOutputCallbackRecord(
-            decompressionOutputCallback: { (decompressionOutputRefCon, _, status, _, imageBuffer, presentationTimeStamp, _) in
+            decompressionOutputCallback: { decompressionOutputRefCon, _, status, _, imageBuffer, presentationTimeStamp, _ in
                 guard let refCon = decompressionOutputRefCon else { return }
                 let decoder = Unmanaged<VideoDecoder>.fromOpaque(refCon).takeUnretainedValue()
                 guard status == noErr, let imageBuffer else {
@@ -50,7 +50,7 @@ public final class VideoDecoder: @unchecked Sendable {
             },
             decompressionOutputRefCon: Unmanaged.passUnretained(self).toOpaque()
         )
-        
+
         var session: VTDecompressionSession?
         let status = VTDecompressionSessionCreate(
             allocator: kCFAllocatorDefault,
@@ -60,19 +60,19 @@ public final class VideoDecoder: @unchecked Sendable {
             outputCallback: &outputCallback,
             decompressionSessionOut: &session
         )
-        
+
         guard status == noErr, let validSession = session else {
             AppLogger.error("Failed to create VTDecompressionSession: \(status)", category: .video)
             return false
         }
-        
+
         // Enable hardware real-time mode
         VTSessionSetProperty(validSession, key: kVTDecompressionPropertyKey_RealTime, value: kCFBooleanTrue)
-        self.decompressionSession = validSession
+        decompressionSession = validSession
         AppLogger.info("VTDecompressionSession created with hardware acceleration", category: .video)
         return true
     }
-    
+
     public func decode(sampleBuffer: CMSampleBuffer) {
         guard let session = decompressionSession else {
             // If format description changed or not initialized, attempt setup
@@ -83,10 +83,10 @@ public final class VideoDecoder: @unchecked Sendable {
             }
             return
         }
-        
+
         var flagsOut: VTDecodeInfoFlags = []
         let decodeFlags: VTDecodeFrameFlags = [._EnableAsynchronousDecompression, ._1xRealTimePlayback]
-        
+
         let start = CFAbsoluteTimeGetCurrent()
         let status = VTDecompressionSessionDecodeFrame(
             session,
@@ -95,7 +95,7 @@ public final class VideoDecoder: @unchecked Sendable {
             frameRefcon: nil,
             infoFlagsOut: &flagsOut
         )
-        
+
         if status != noErr {
             AppLogger.warning("VTDecompressionSessionDecodeFrame status: \(status)", category: .airplay)
             PerformanceMonitor.shared.recordDroppedFrame()
@@ -104,7 +104,7 @@ public final class VideoDecoder: @unchecked Sendable {
             PerformanceMonitor.shared.recordDecodeTime(elapsed)
         }
     }
-    
+
     private func handleDecodedFrame(_ pixelBuffer: CVPixelBuffer, pts: CMTime) {
         if !didLogFirstPixelBuffer {
             didLogFirstPixelBuffer = true
@@ -121,7 +121,7 @@ public final class VideoDecoder: @unchecked Sendable {
             AppLogger.warning("VT decode callback status: \(status) (count=\(decodeErrorCount))", category: .airplay)
         }
     }
-    
+
     public func invalidateSession() {
         if let session = decompressionSession {
             VTDecompressionSessionInvalidate(session)

@@ -1,6 +1,6 @@
-import Foundation
 import Combine
 import CoreVideo
+import Foundation
 
 public enum ReceiverState: Sendable, Equatable {
     case idle
@@ -14,7 +14,7 @@ public enum ReceiverState: Sendable, Equatable {
 public protocol ScreenMirrorReceiver: AnyObject, Sendable {
     var state: ReceiverState { get }
     var framePublisher: AnyPublisher<VideoFrame, Never> { get }
-    
+
     func start() async throws
     func stop()
 }

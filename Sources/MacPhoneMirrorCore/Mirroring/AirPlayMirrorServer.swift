@@ -1,6 +1,6 @@
+import Darwin
 import Foundation
 import Network
-import Darwin
 
 final class AirPlayMirrorServer: @unchecked Sendable {
     static let shared = AirPlayMirrorServer()
@@ -84,7 +84,7 @@ final class AirPlayMirrorServer: @unchecked Sendable {
 
     private func bindListenSocket(_ fd: Int32, preferredPort: UInt16) -> UInt16? {
         var candidates: [UInt16] = [preferredPort]
-        candidates.append(contentsOf: UInt16(7101)...UInt16(7110))
+        candidates.append(contentsOf: UInt16(7101) ... UInt16(7110))
         candidates.append(0)
 
         for port in candidates {
@@ -109,12 +109,11 @@ final class AirPlayMirrorServer: @unchecked Sendable {
                     }
                 }
                 guard nameResult == 0, storage.ss_family == sa_family_t(AF_INET6) else { return nil }
-                let assigned = withUnsafePointer(to: &storage) {
+                return withUnsafePointer(to: &storage) {
                     $0.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) {
                         UInt16(bigEndian: $0.pointee.sin6_port)
                     }
                 }
-                return assigned
             }
 
             return port
@@ -147,7 +146,8 @@ final class AirPlayMirrorServer: @unchecked Sendable {
             AppLogger.info("Mirror stream connection from \(endpoint)", category: .airplay)
 
             guard let audioKey = AirPlaySessionContext.shared.currentMirrorAESKey(),
-                  let streamConnectionID = AirPlaySessionContext.shared.currentMirrorStreamConnectionID() else {
+                  let streamConnectionID = AirPlaySessionContext.shared.currentMirrorStreamConnectionID()
+            else {
                 AppLogger.error("Mirror stream rejected: session keys unavailable", category: .airplay)
                 close(clientFD)
                 continue
@@ -173,7 +173,7 @@ final class AirPlayMirrorServer: @unchecked Sendable {
         setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, socklen_t(MemoryLayout<Int32>.size))
         var keepalive: Int32 = 1
         setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, socklen_t(MemoryLayout<Int32>.size))
-        var timeout = timeval(tv_sec: 0, tv_usec: 5_000)
+        var timeout = timeval(tv_sec: 0, tv_usec: 5000)
         setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
     }
 
@@ -302,7 +302,7 @@ private final class MirrorStreamSession: @unchecked Sendable {
     private func processBuffer() {
         while true {
             switch mode {
-            case .skipPlistBody(let totalLength):
+            case let .skipPlistBody(totalLength):
                 guard buffer.count >= totalLength else { return }
                 buffer.removeSubrange(..<totalLength)
                 AppLogger.info("Mirror stream plist body skipped (\(totalLength) bytes)", category: .airplay)
@@ -377,7 +377,7 @@ private final class MirrorStreamSession: @unchecked Sendable {
         let totalSize = 128 + payloadSize
         guard buffer.count >= totalSize else { return false }
 
-        let payload = buffer.subdata(in: 128..<totalSize)
+        let payload = buffer.subdata(in: 128 ..< totalSize)
         buffer.removeSubrange(..<totalSize)
         handleMirrorPacket(header: header, payload: payload)
         return true
@@ -404,18 +404,18 @@ private final class MirrorStreamSession: @unchecked Sendable {
         case 0x01:
             notifyStreamStartedIfNeeded()
             let option = header[header.startIndex + 6]
-            if option == 0x56 || option == 0x5e {
+            if option == 0x56 || option == 0x5E {
                 AppLogger.info("Mirror video suspended (client screen off)", category: .airplay)
                 decoder.noteStreamSuspended()
                 break
             }
 
-            if payload.count >= 8, payload.subdata(in: 4..<8) == Data([0x68, 0x76, 0x63, 0x31]) {
+            if payload.count >= 8, payload.subdata(in: 4 ..< 8) == Data([0x68, 0x76, 0x63, 0x31]) {
                 AppLogger.warning("HEVC mirror stream not supported yet (\(payload.count) bytes)", category: .airplay)
             } else {
                 decoder.ingestParameterSets(payload)
             }
-            if option == 0x16 || option == 0x1e {
+            if option == 0x16 || option == 0x1E {
                 decoder.noteStreamResumed()
             }
             pendingParameterSets = true
@@ -459,7 +459,7 @@ private final class MirrorStreamSession: @unchecked Sendable {
 
     private func readUInt32LE(_ data: Data, offset: Int) -> Int {
         guard offset + 4 <= data.count else { return -1 }
-        let bytes = [UInt8](data[offset..<(offset + 4)])
+        let bytes = [UInt8](data[offset ..< (offset + 4)])
         return Int(bytes[0])
             | (Int(bytes[1]) << 8)
             | (Int(bytes[2]) << 16)

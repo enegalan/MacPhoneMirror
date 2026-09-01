@@ -1,5 +1,5 @@
-import SwiftUI
 import MacPhoneMirrorCore
+import SwiftUI
 
 public struct MirrorSessionWindow: View {
     public let sessionID: String

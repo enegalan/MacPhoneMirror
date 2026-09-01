@@ -11,16 +11,20 @@ public enum FrameFinish: String, CaseIterable, Identifiable, Codable, Sendable {
     case silver = "Silver"
     case gold = "Gold"
     case deepPurple = "Deep Purple"
-    
-    public var id: String { rawValue }
+
+    public var id: String {
+        rawValue
+    }
 }
 
 public enum FrameDisplayMode: String, CaseIterable, Identifiable, Codable, Sendable {
     case realisticFrame = "Realistic Frame"
     case minimalBezel = "Minimal Bezel"
     case borderless = "Borderless"
-    
-    public var id: String { rawValue }
+
+    public var id: String {
+        rawValue
+    }
 }
 
 public struct FrameRenderStyle: Codable, Sendable, Equatable {
@@ -31,7 +35,7 @@ public struct FrameRenderStyle: Codable, Sendable, Equatable {
     public var showDynamicIsland: Bool
     public var showHardwareButtons: Bool
     public var scaleFactor: Double
-    
+
     public init(
         displayMode: FrameDisplayMode = .realisticFrame,
         finish: FrameFinish = .naturalTitanium,
@@ -49,6 +53,6 @@ public struct FrameRenderStyle: Codable, Sendable, Equatable {
         self.showHardwareButtons = showHardwareButtons
         self.scaleFactor = scaleFactor
     }
-    
+
     public static let standard = FrameRenderStyle()
 }

@@ -47,7 +47,7 @@ public struct QuickActionButton: View {
                 Text(title)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(.primary)
-                if let shortcut = shortcut {
+                if let shortcut {
                     Text(shortcut)
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
                         .foregroundColor(.secondary)

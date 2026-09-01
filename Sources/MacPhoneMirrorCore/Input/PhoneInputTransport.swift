@@ -35,23 +35,23 @@ public enum PhoneInputEvent: Sendable, Equatable {
     case volumeDown
     case siri
     case swipe(direction: SwipeDirection)
-    
+
     public static func == (lhs: PhoneInputEvent, rhs: PhoneInputEvent) -> Bool {
         switch (lhs, rhs) {
-        case (.pointerMove(let x1, let y1), .pointerMove(let x2, let y2)):
-            return x1 == x2 && y1 == y2
-        case (.pointerTo(let x1, let y1), .pointerTo(let x2, let y2)):
-            return x1 == x2 && y1 == y2
-        case (.pointerDown(let b1), .pointerDown(let b2)):
-            return b1 == b2
-        case (.pointerUp(let b1), .pointerUp(let b2)):
-            return b1 == b2
-        case (.scroll(let x1, let y1), .scroll(let x2, let y2)):
-            return x1 == x2 && y1 == y2
-        case (.keyDown(let k1, let m1), .keyDown(let k2, let m2)):
-            return k1 == k2 && m1 == m2
-        case (.keyUp(let k1), .keyUp(let k2)):
-            return k1 == k2
+        case let (.pointerMove(x1, y1), .pointerMove(x2, y2)):
+            x1 == x2 && y1 == y2
+        case let (.pointerTo(x1, y1), .pointerTo(x2, y2)):
+            x1 == x2 && y1 == y2
+        case let (.pointerDown(b1), .pointerDown(b2)):
+            b1 == b2
+        case let (.pointerUp(b1), .pointerUp(b2)):
+            b1 == b2
+        case let (.scroll(x1, y1), .scroll(x2, y2)):
+            x1 == x2 && y1 == y2
+        case let (.keyDown(k1, m1), .keyDown(k2, m2)):
+            k1 == k2 && m1 == m2
+        case let (.keyUp(k1), .keyUp(k2)):
+            k1 == k2
         case (.homeButton, .homeButton),
              (.lockScreen, .lockScreen),
              (.appSwitcher, .appSwitcher),
@@ -60,11 +60,11 @@ public enum PhoneInputEvent: Sendable, Equatable {
              (.volumeUp, .volumeUp),
              (.volumeDown, .volumeDown),
              (.siri, .siri):
-            return true
-        case (.swipe(let d1), .swipe(let d2)):
-            return d1 == d2
+            true
+        case let (.swipe(d1), .swipe(d2)):
+            d1 == d2
         default:
-            return false
+            false
         }
     }
 }
@@ -79,7 +79,7 @@ public enum SwipeDirection: String, Sendable, Codable {
 public protocol PhoneInputTransport: AnyObject, Sendable {
     var isConnected: Bool { get }
     var transportName: String { get }
-    
+
     func connect() async throws
     func disconnect()
     func send(_ event: PhoneInputEvent) async throws

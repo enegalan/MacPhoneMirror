@@ -1,6 +1,6 @@
+import Combine
 import Foundation
 import Network
-import Combine
 
 public final class BonjourDiscovery: DeviceDiscovery, @unchecked Sendable {
     private let devicesSubject = CurrentValueSubject<[PhoneDevice], Never>([])
@@ -44,7 +44,7 @@ public final class BonjourDiscovery: DeviceDiscovery, @unchecked Sendable {
 
             browser.browseResultsChangedHandler = { [weak self, weak browser] results, _ in
                 guard let self, let browser else { return }
-                self.storeResults(results, for: browser)
+                storeResults(results, for: browser)
             }
 
             browser.start(queue: queue)
@@ -81,7 +81,7 @@ public final class BonjourDiscovery: DeviceDiscovery, @unchecked Sendable {
         var seenKeys = Set<String>()
 
         for result in results {
-            guard case .service(let serviceName, _, _, _) = result.endpoint else { continue }
+            guard case let .service(serviceName, _, _, _) = result.endpoint else { continue }
             guard let displayName = resolveDisplayName(serviceName: serviceName, metadata: result.metadata) else { continue }
             guard displayName != AirPlayTXTRecordBuilder.serviceName else { continue }
 
@@ -105,14 +105,16 @@ public final class BonjourDiscovery: DeviceDiscovery, @unchecked Sendable {
     }
 
     private func resolveDisplayName(serviceName: String, metadata: NWBrowser.Result.Metadata) -> String? {
-        if case .bonjour(let txtRecord) = metadata {
+        if case let .bonjour(txtRecord) = metadata {
             if let model = txtRecord["model"]?.lowercased(),
-               model.contains("appletv") || model.contains("audioaccessory") || model.contains("mac") {
+               model.contains("appletv") || model.contains("audioaccessory") || model.contains("mac")
+            {
                 return nil
             }
 
             if let friendlyName = txtRecord["fn"] ?? txtRecord["name"],
-               DeviceDiscoveryFilter.isLikelyPhoneName(friendlyName) {
+               DeviceDiscoveryFilter.isLikelyPhoneName(friendlyName)
+            {
                 return friendlyName
             }
         }
@@ -125,8 +127,9 @@ public final class BonjourDiscovery: DeviceDiscovery, @unchecked Sendable {
     }
 
     private func mapModel(from metadata: NWBrowser.Result.Metadata) -> PhoneModel {
-        guard case .bonjour(let txtRecord) = metadata,
-              let modelID = txtRecord["model"]?.lowercased() else {
+        guard case let .bonjour(txtRecord) = metadata,
+              let modelID = txtRecord["model"]?.lowercased()
+        else {
             return .iPhone16Pro
         }
 

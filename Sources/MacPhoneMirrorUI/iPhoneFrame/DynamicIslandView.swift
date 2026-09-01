@@ -1,5 +1,5 @@
-import SwiftUI
 import MacPhoneMirrorCore
+import SwiftUI
 
 public enum DynamicIslandState: Equatable {
     case compact
@@ -11,24 +11,22 @@ public struct DynamicIslandView: View {
     public let model: PhoneModel
     @State private var islandState: DynamicIslandState = .compact
     @State private var isHovered: Bool = false
-    
+
     public init(model: PhoneModel) {
         self.model = model
     }
-    
+
     public var body: some View {
-        Group {
-            switch model.cutoutStyle {
-            case .dynamicIsland:
-                dynamicIslandContent
-            case .notch:
-                notchContent
-            case .none:
-                EmptyView()
-            }
+        switch model.cutoutStyle {
+        case .dynamicIsland:
+            dynamicIslandContent
+        case .notch:
+            notchContent
+        case .none:
+            EmptyView()
         }
     }
-    
+
     private var dynamicIslandContent: some View {
         ZStack {
             Capsule(style: .continuous)
@@ -37,7 +35,7 @@ public struct DynamicIslandView: View {
                     Capsule(style: .continuous)
                         .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
                 )
-            
+
             switch islandState {
             case .compact:
                 HStack(spacing: 8) {
@@ -46,36 +44,36 @@ public struct DynamicIslandView: View {
                         .fill(Color(red: 0.08, green: 0.12, blue: 0.2))
                         .frame(width: 10, height: 10)
                         .overlay(Circle().fill(Color.blue.opacity(0.3)).frame(width: 4, height: 4))
-                    
+
                     Spacer()
-                    
+
                     // FaceID / Ambient light sensor
                     Circle()
                         .fill(Color(red: 0.05, green: 0.05, blue: 0.08))
                         .frame(width: 9, height: 9)
                 }
                 .padding(.horizontal, 10)
-                
+
             case .expandedMedia:
                 HStack(spacing: 10) {
                     Image(systemName: "music.note")
                         .foregroundColor(.pink)
                         .font(.system(size: 13, weight: .bold))
-                    
+
                     VStack(alignment: .leading, spacing: 1) {
                         Text("Now Playing")
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundColor(.white)
                     }
                     Spacer()
-                    
+
                     Image(systemName: "waveform")
                         .foregroundColor(.green)
                         .font(.system(size: 13))
                 }
                 .padding(.horizontal, 14)
-                
-            case .expandedNotification(let title, let subtitle):
+
+            case let .expandedNotification(title, subtitle):
                 HStack(spacing: 8) {
                     Image(systemName: "iphone.radiowaves.left.and.right")
                         .foregroundColor(.blue)
@@ -107,7 +105,7 @@ public struct DynamicIslandView: View {
             }
         }
     }
-    
+
     private var notchContent: some View {
         ZStack(alignment: .top) {
             UnevenRoundedRectangle(
@@ -117,13 +115,13 @@ public struct DynamicIslandView: View {
             )
             .fill(Color.black)
             .frame(width: 160, height: 32)
-            
+
             // Speaker ear piece & Camera
             HStack(spacing: 12) {
                 Capsule()
                     .fill(Color(white: 0.18))
                     .frame(width: 44, height: 4)
-                
+
                 Circle()
                     .fill(Color(red: 0.08, green: 0.12, blue: 0.2))
                     .frame(width: 10, height: 10)

@@ -1,6 +1,6 @@
-import SwiftUI
 import MacPhoneMirrorCore
 import MacPhoneMirrorUI
+import SwiftUI
 
 @main
 struct MacPhoneMirrorApp: App {

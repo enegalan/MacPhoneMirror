@@ -1,5 +1,5 @@
-import SwiftUI
 import MacPhoneMirrorCore
+import SwiftUI
 
 public struct MenuBarExtraView: View {
     @ObservedObject private var sessionManager = SessionManager.shared

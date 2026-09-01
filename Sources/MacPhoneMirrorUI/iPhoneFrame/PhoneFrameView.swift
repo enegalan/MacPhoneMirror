@@ -1,5 +1,5 @@
-import SwiftUI
 import MacPhoneMirrorCore
+import SwiftUI
 
 public struct PhoneFrameView<ScreenContent: View>: View {
     public let model: PhoneModel
@@ -56,7 +56,7 @@ public struct PhoneFrameView<ScreenContent: View>: View {
             screenContent
                 .frame(width: orientedScreenSize.width, height: orientedScreenSize.height)
 
-            if style.showDynamicIsland && orientation.isPortrait {
+            if style.showDynamicIsland, orientation.isPortrait {
                 VStack {
                     DynamicIslandView(model: model)
                         .padding(.top, 11)
@@ -87,7 +87,7 @@ public struct PhoneFrameView<ScreenContent: View>: View {
         let outerSize = CGSize(width: chassisSize.width + 16, height: chassisSize.height + 16)
 
         return ZStack {
-            if style.showHardwareButtons && orientation.isPortrait {
+            if style.showHardwareButtons, orientation.isPortrait {
                 HardwareButtonsView(
                     frameHeight: chassisSize.height + 16,
                     onActionButton: {

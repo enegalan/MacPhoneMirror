@@ -1,7 +1,7 @@
-import Foundation
-import CoreBluetooth
-import AVFoundation
 import AppKit
+import AVFoundation
+import CoreBluetooth
+import Foundation
 import Network
 
 public enum SystemPermission: String, CaseIterable, Identifiable, Sendable {
@@ -9,19 +9,21 @@ public enum SystemPermission: String, CaseIterable, Identifiable, Sendable {
     case bluetooth = "Bluetooth"
     case cameraAndCapture = "Screen / Device Capture"
     case accessibility = "Accessibility (Input Emulation)"
-    
-    public var id: String { rawValue }
-    
+
+    public var id: String {
+        rawValue
+    }
+
     public var reasonDescription: String {
         switch self {
         case .localNetwork:
-            return "Required to discover iPhones advertising AirPlay / Bonjour services on your local Wi-Fi network."
+            "Required to discover iPhones advertising AirPlay / Bonjour services on your local Wi-Fi network."
         case .bluetooth:
-            return "Required to pair MacPhoneMirror as a Bluetooth HID device for mouse and keyboard control."
+            "Required to pair MacPhoneMirror as a Bluetooth HID device for mouse and keyboard control."
         case .cameraAndCapture:
-            return "Required by macOS AVFoundation to access tethered iPhone video streams via USB."
+            "Required by macOS AVFoundation to access tethered iPhone video streams via USB."
         case .accessibility:
-            return "Optional helper for global hotkeys and mouse coordinate monitoring."
+            "Optional helper for global hotkeys and mouse coordinate monitoring."
         }
     }
 }
@@ -33,7 +35,7 @@ public final class PermissionManager: NSObject, @unchecked Sendable {
     private let lock = NSLock()
     private var localNetworkBrowser: NWBrowser?
 
-    private override init() {
+    override private init() {
         super.init()
     }
 
@@ -83,7 +85,7 @@ public final class PermissionManager: NSObject, @unchecked Sendable {
             AppLogger.error("Failed to start AirPlay advertising: \(error.localizedDescription)", category: .airplay)
         }
     }
-    
+
     public func requestCameraCapturePermission() async -> Bool {
         let status = AVCaptureDevice.authorizationStatus(for: .video)
         if status == .authorized {
@@ -91,26 +93,25 @@ public final class PermissionManager: NSObject, @unchecked Sendable {
         }
         return await AVCaptureDevice.requestAccess(for: .video)
     }
-    
+
     public func promptAccessibilitySettings() {
         let key = "AXTrustedCheckOptionPrompt" as CFString
         let options = [key: true] as CFDictionary
         _ = AXIsProcessTrustedWithOptions(options)
     }
-    
+
     public func openSystemSettings(for permission: SystemPermission) {
-        let urlString: String
-        switch permission {
+        let urlString = switch permission {
         case .localNetwork:
-            urlString = "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_LocalNetwork"
+            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_LocalNetwork"
         case .cameraAndCapture:
-            urlString = "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera"
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera"
         case .bluetooth:
-            urlString = "x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth"
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth"
         case .accessibility:
-            urlString = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
         }
-        
+
         if let url = URL(string: urlString) {
             NSWorkspace.shared.open(url)
         }
