@@ -66,9 +66,6 @@ public struct DynamicIslandView: View {
                         Text("Now Playing")
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundColor(.white)
-                        Text("MacPhoneMirror Pro Audio")
-                            .font(.system(size: 8))
-                            .foregroundColor(.gray)
                     }
                     Spacer()
                     

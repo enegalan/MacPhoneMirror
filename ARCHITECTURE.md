@@ -19,7 +19,7 @@ MacPhoneMirror is structured with a modular, protocol-oriented Swift 6 architect
 │  - MetalVideoView MTKView     │  Receivers)   │  - Input & Coordinate Mapper  │
 │  - Diagnostics & HUD Overlay  │               │  - Device Discovery           │
 │  - Device List & Pairing View │               │  - Bluetooth HID Transport    │
-│  - Settings & Pro Licensing   │               │  - Structured Logger          │
+│  - Settings & Preferences     │               │  - Structured Logger          │
 └───────────────────────────────┘               └───────────────────────────────┘
 ```
 
@@ -59,11 +59,6 @@ MacPhoneMirror is structured with a modular, protocol-oriented Swift 6 architect
 * `ConnectionState`: State enum (`disconnected`, `discovering`, `connecting`, `mirroring`, `controlling`, `reconnecting`, `failed`).
 * `SessionManager`: Singleton coordinating active device, receiver, input transport, orientation, and diagnostics.
 
-#### F. Entitlements & Pro Features
-* `Feature`: Enumeration of Free vs. Pro capabilities.
-* `EntitlementProvider`: Contract for feature gating and license activation.
-* `LocalEntitlementProvider`: Default local implementation.
-
 ---
 
 ## 2. UI Layer (`MacPhoneMirrorUI`)
@@ -76,7 +71,6 @@ MacPhoneMirror is structured with a modular, protocol-oriented Swift 6 architect
 * **`DeviceListView` & `PairingGuideView`**: Device management and interactive pairing walkthroughs.
 * **`ControlConfigView` & `AssistiveTouchGuideView`**: Visual instructions for enabling AssistiveTouch pointer control on iPhone.
 * **`SettingsView`**: Preferences for video quality, appearance, input sensitivity, and permissions.
-* **`ProUpgradeView`**: Feature matrix and license key activator.
 
 ---
 

@@ -5,7 +5,6 @@ import Combine
 public struct MainWindowView: View {
     @State private var selectedTab: AppNavigationTab = .mirror
     @State private var frameStyle = FrameRenderStyle.standard
-    @State private var showProSheet = false
     @State private var showPairingGuide = false
 
     @ObservedObject private var sessionManager = SessionManager.shared
@@ -24,8 +23,7 @@ public struct MainWindowView: View {
                 sessions: sessionManager.sessions,
                 onFocusSession: { sessionID in
                     openWindow(id: MirrorWindowID.session, value: sessionID)
-                },
-                onUpgradePro: { showProSheet = true }
+                }
             )
             .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 280)
         } detail: {
@@ -48,9 +46,6 @@ public struct MainWindowView: View {
                     }
                 }
             }
-        }
-        .sheet(isPresented: $showProSheet) {
-            ProUpgradeView()
         }
         .sheet(isPresented: $showPairingGuide) {
             PairingGuideView()

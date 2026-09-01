@@ -66,17 +66,15 @@ public struct VideoSettingsView: View {
     
     public var body: some View {
         Form {
-            Section(header: Text("Stream Quality")) {
-                Picker("Stream Resolution", selection: $selectedQuality) {
-                    Text("Ultra (Native / 60 FPS)").tag("Ultra (Native / 60 FPS)")
-                    Text("High (1080p / 60 FPS)").tag("High (1080p / 60 FPS)")
-                    Text("Balanced (720p / 60 FPS)").tag("Balanced (720p / 60 FPS)")
-                    Text("Low Bandwidth (720p / 30 FPS)").tag("Low Bandwidth (720p / 30 FPS)")
-                }
-                
-                Toggle("Hardware VideoToolbox Acceleration", isOn: $enableHardwareDecode)
-                Toggle("Low-Latency Pipeline Mode", isOn: $lowLatencyMode)
+            Picker("Stream Resolution", selection: $selectedQuality) {
+                Text("Ultra (Native / 60 FPS)").tag("Ultra (Native / 60 FPS)")
+                Text("High (1080p / 60 FPS)").tag("High (1080p / 60 FPS)")
+                Text("Balanced (720p / 60 FPS)").tag("Balanced (720p / 60 FPS)")
+                Text("Low Bandwidth (720p / 30 FPS)").tag("Low Bandwidth (720p / 30 FPS)")
             }
+            
+            Toggle("Hardware VideoToolbox Acceleration", isOn: $enableHardwareDecode)
+            Toggle("Low-Latency Pipeline Mode", isOn: $lowLatencyMode)
         }
         .padding(16)
     }
@@ -91,25 +89,23 @@ public struct AppearanceSettingsView: View {
     
     public var body: some View {
         Form {
-            Section(header: Text("Display Mode")) {
-                Picker("Frame Style", selection: $frameStyle.displayMode) {
-                    ForEach(FrameDisplayMode.allCases) { mode in
-                        Text(mode.rawValue).tag(mode)
+            Picker("Frame Style", selection: $frameStyle.displayMode) {
+                ForEach(FrameDisplayMode.allCases) { mode in
+                    Text(mode.rawValue).tag(mode)
+                }
+            }
+            
+            if frameStyle.displayMode == .realisticFrame {
+                Picker("Chassis Finish", selection: $frameStyle.finish) {
+                    ForEach(FrameFinish.allCases) { finish in
+                        Text(finish.rawValue).tag(finish)
                     }
                 }
                 
-                if frameStyle.displayMode == .realisticFrame {
-                    Picker("Chassis Finish", selection: $frameStyle.finish) {
-                        ForEach(FrameFinish.allCases) { finish in
-                            Text(finish.rawValue).tag(finish)
-                        }
-                    }
-                    
-                    Toggle("Dynamic Island / Notch Overlay", isOn: $frameStyle.showDynamicIsland)
-                    Toggle("Hardware Buttons (Action / Volume / Power)", isOn: $frameStyle.showHardwareButtons)
-                    Toggle("Chassis Reflection & Metal Specular Highlight", isOn: $frameStyle.showReflection)
-                    Toggle("Realistic Drop Shadow", isOn: $frameStyle.showShadow)
-                }
+                Toggle("Dynamic Island / Notch Overlay", isOn: $frameStyle.showDynamicIsland)
+                Toggle("Hardware Buttons (Action / Volume / Power)", isOn: $frameStyle.showHardwareButtons)
+                Toggle("Chassis Reflection & Metal Specular Highlight", isOn: $frameStyle.showReflection)
+                Toggle("Realistic Drop Shadow", isOn: $frameStyle.showShadow)
             }
         }
         .padding(16)

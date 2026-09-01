@@ -25,20 +25,17 @@ public struct SidebarView: View {
     public let activeState: ConnectionState
     public let sessions: [MirrorSession]
     public let onFocusSession: (String) -> Void
-    public let onUpgradePro: () -> Void
 
     public init(
         selectedTab: Binding<AppNavigationTab>,
         activeState: ConnectionState,
         sessions: [MirrorSession] = [],
-        onFocusSession: @escaping (String) -> Void = { _ in },
-        onUpgradePro: @escaping () -> Void
+        onFocusSession: @escaping (String) -> Void = { _ in }
     ) {
         self._selectedTab = selectedTab
         self.activeState = activeState
         self.sessions = sessions
         self.onFocusSession = onFocusSession
-        self.onUpgradePro = onUpgradePro
     }
 
     public var body: some View {
@@ -77,24 +74,5 @@ public struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .safeAreaInset(edge: .bottom) {
-            VStack {
-                Divider()
-                Button(action: onUpgradePro) {
-                    HStack {
-                        Image(systemName: "crown.fill")
-                            .foregroundColor(.yellow)
-                        Text("MacPhoneMirror Pro")
-                            .font(.subheadline.bold())
-                        Spacer()
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.06)))
-                }
-                .buttonStyle(.plain)
-                .padding(12)
-            }
-        }
     }
 }
