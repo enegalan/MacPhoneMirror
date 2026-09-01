@@ -5,11 +5,13 @@ import Combine
 public struct MainWindowView: View {
     @State private var selectedTab: AppNavigationTab = .mirror
     @State private var frameStyle = FrameRenderStyle.standard
-    @State private var showProSheet = false
     @State private var showPairingGuide = false
 
     @ObservedObject private var sessionManager = SessionManager.shared
     @ObservedObject private var pairingState = AirPlayPairingState.shared
+
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
 
     public init() {}
 
@@ -18,14 +20,17 @@ public struct MainWindowView: View {
             SidebarView(
                 selectedTab: $selectedTab,
                 activeState: sessionManager.state,
-                onUpgradePro: { showProSheet = true }
+                sessions: sessionManager.sessions,
+                onFocusSession: { sessionID in
+                    openWindow(id: MirrorWindowID.session, value: sessionID)
+                }
             )
             .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 280)
         } detail: {
             Group {
                 switch selectedTab {
                 case .mirror:
-                    mirrorTabContent
+                    hubMirrorContent
                 case .control:
                     ControlConfigView()
                 case .settings:
@@ -34,32 +39,34 @@ public struct MainWindowView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .automatic) {
-                    if sessionManager.state.isConnectedOrMirroring {
+                    if !sessionManager.sessions.isEmpty {
                         Button(role: .destructive, action: { sessionManager.disconnect() }) {
-                            Label("Stop Mirroring", systemImage: "xmark.circle")
+                            Label("Stop All", systemImage: "xmark.circle")
                         }
                     }
                 }
             }
         }
-        .sheet(isPresented: $showProSheet) {
-            ProUpgradeView()
-        }
         .sheet(isPresented: $showPairingGuide) {
             PairingGuideView()
         }
+        .onAppear {
+            for session in sessionManager.sessions {
+                openWindow(id: MirrorWindowID.session, value: session.id)
+            }
+        }
+        .onReceive(sessionManager.sessionWindowOpenPublisher) { sessionID in
+            openWindow(id: MirrorWindowID.session, value: sessionID)
+        }
+        .onReceive(sessionManager.sessionWindowClosePublisher) { sessionID in
+            dismissWindow(id: MirrorWindowID.session, value: sessionID)
+        }
     }
 
-    private var mirrorTabContent: some View {
+    private var hubMirrorContent: some View {
         Group {
             if case .failed(let message) = sessionManager.state {
                 connectionErrorView(message: message)
-            } else if let activeDevice = sessionManager.state.activeDevice {
-                MirrorViewportView(
-                    device: activeDevice,
-                    orientation: sessionManager.orientation,
-                    style: frameStyle
-                )
             } else {
                 waitingForAirPlayView
             }
@@ -82,7 +89,7 @@ public struct MainWindowView: View {
             VStack(spacing: 8) {
                 Text("Waiting for iPhone")
                     .font(.title2.bold())
-                Text("On your iPhone, open Control Center → Screen Mirroring → MacPhoneMirror.")
+                Text("On your iPhone, open Control Center → Screen Mirroring → MacPhoneMirror.\nEach connected device opens in its own window.")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -90,6 +97,22 @@ public struct MainWindowView: View {
             }
 
             StatusBadge(state: sessionManager.state)
+
+            if !sessionManager.sessions.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Active devices")
+                        .font(.headline)
+                    ForEach(sessionManager.sessions) { session in
+                        Button {
+                            openWindow(id: MirrorWindowID.session, value: session.id)
+                        } label: {
+                            Label(session.device.name, systemImage: "iphone")
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+                .padding(.top, 8)
+            }
 
             if let pin = pairingState.displayPIN {
                 VStack(spacing: 8) {

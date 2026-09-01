@@ -2,6 +2,7 @@ import SwiftUI
 import MacPhoneMirrorCore
 
 public struct MirrorViewportView: View {
+    public let sessionID: String
     public let device: PhoneDevice
     public let orientation: DeviceOrientation
     public let style: FrameRenderStyle
@@ -9,10 +10,12 @@ public struct MirrorViewportView: View {
     @StateObject private var metalHolder = MetalViewStateHolder()
 
     public init(
+        sessionID: String,
         device: PhoneDevice,
         orientation: DeviceOrientation = .portrait,
         style: FrameRenderStyle = .standard
     ) {
+        self.sessionID = sessionID
         self.device = device
         self.orientation = orientation
         self.style = style
@@ -29,7 +32,8 @@ public struct MirrorViewportView: View {
                     PhoneFrameView(
                         model: device.model,
                         orientation: orientation,
-                        style: style
+                        style: style,
+                        sessionID: sessionID
                     ) {
                         MetalVideoView(stateHolder: metalHolder)
                             .frame(width: screenSize.width, height: screenSize.height)
@@ -41,7 +45,8 @@ public struct MirrorViewportView: View {
                                         Task {
                                             await SessionManager.shared.handleMouseClick(
                                                 at: point,
-                                                viewportSize: screenSize
+                                                viewportSize: screenSize,
+                                                sessionID: sessionID
                                             )
                                         }
                                     }
@@ -52,26 +57,34 @@ public struct MirrorViewportView: View {
                     Spacer()
 
                     QuickControlsBar(
-                        onHome: { Task { try? await SessionManager.shared.sendInputEvent(.homeButton) } },
-                        onAppSwitcher: { Task { try? await SessionManager.shared.sendInputEvent(.appSwitcher) } },
-                        onControlCenter: { Task { try? await SessionManager.shared.sendInputEvent(.controlCenter) } },
-                        onNotifications: { Task { try? await SessionManager.shared.sendInputEvent(.notificationCenter) } },
-                        onLock: { Task { try? await SessionManager.shared.sendInputEvent(.lockScreen) } },
+                        onHome: {
+                            Task { try? await SessionManager.shared.sendInputEvent(.homeButton, sessionID: sessionID) }
+                        },
+                        onAppSwitcher: {
+                            Task { try? await SessionManager.shared.sendInputEvent(.appSwitcher, sessionID: sessionID) }
+                        },
+                        onControlCenter: {
+                            Task { try? await SessionManager.shared.sendInputEvent(.controlCenter, sessionID: sessionID) }
+                        },
+                        onNotifications: {
+                            Task { try? await SessionManager.shared.sendInputEvent(.notificationCenter, sessionID: sessionID) }
+                        },
+                        onLock: {
+                            Task { try? await SessionManager.shared.sendInputEvent(.lockScreen, sessionID: sessionID) }
+                        },
                         onScreenshot: { AppLogger.info("Screenshot taken", category: .ui) }
                     )
                     .padding(.bottom, 16)
                 }
             }
-            .onAppear {
-                if let rec = SessionManager.shared.currentReceiver {
-                    metalHolder.bind(to: rec)
-                }
-            }
-            .onChange(of: device.id) { _, _ in
-                if let rec = SessionManager.shared.currentReceiver {
-                    metalHolder.bind(to: rec)
-                }
-            }
+            .onAppear { bindReceiver() }
+            .onChange(of: sessionID) { _, _ in bindReceiver() }
+        }
+    }
+
+    private func bindReceiver() {
+        if let rec = SessionManager.shared.receiver(for: sessionID) {
+            metalHolder.bind(to: rec)
         }
     }
 

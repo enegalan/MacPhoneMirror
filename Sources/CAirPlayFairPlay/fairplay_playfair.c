@@ -61,6 +61,8 @@ int fairplay_handshake(fairplay_t *fp, const unsigned char req[164], unsigned ch
 
 int fairplay_decrypt(fairplay_t *fp, const unsigned char input[72], unsigned char output[16])
 {
+    assert(fp);
+
     if (fp->keymsglen != 164) {
         return -1;
     }

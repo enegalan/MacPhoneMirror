@@ -1,3 +1,10 @@
+/* This source file is derived from the UxPlay project
+ * (https://github.com/FDH2/UxPlay), specifically its FairPlay/PlayFair protocol
+ * implementation, and is distributed under the MIT License.
+ * Copyright (c) the UxPlay contributors.
+ * https://opensource.org/licenses/MIT
+ */
+
 void modified_md5(unsigned char* originalblockIn, unsigned char* keyIn, unsigned char* keyOut);
 void sap_hash(unsigned char* blockIn, unsigned char* keyOut);
 

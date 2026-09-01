@@ -5,9 +5,9 @@ public enum AppNavigationTab: String, CaseIterable, Identifiable {
     case mirror = "Mirroring"
     case control = "Control"
     case settings = "Settings"
-    
+
     public var id: String { rawValue }
-    
+
     public var icon: String {
         switch self {
         case .mirror:
@@ -23,18 +23,21 @@ public enum AppNavigationTab: String, CaseIterable, Identifiable {
 public struct SidebarView: View {
     @Binding var selectedTab: AppNavigationTab
     public let activeState: ConnectionState
-    public let onUpgradePro: () -> Void
-    
+    public let sessions: [MirrorSession]
+    public let onFocusSession: (String) -> Void
+
     public init(
         selectedTab: Binding<AppNavigationTab>,
         activeState: ConnectionState,
-        onUpgradePro: @escaping () -> Void
+        sessions: [MirrorSession] = [],
+        onFocusSession: @escaping (String) -> Void = { _ in }
     ) {
         self._selectedTab = selectedTab
         self.activeState = activeState
-        self.onUpgradePro = onUpgradePro
+        self.sessions = sessions
+        self.onFocusSession = onFocusSession
     }
-    
+
     public var body: some View {
         List(selection: $selectedTab) {
             Section("Features") {
@@ -44,38 +47,32 @@ public struct SidebarView: View {
                     }
                 }
             }
-            
+
             Section("Session Status") {
                 VStack(alignment: .leading, spacing: 6) {
                     StatusBadge(state: activeState)
-                    if let dev = activeState.activeDevice {
-                        Text(dev.name)
+                    if sessions.isEmpty {
+                        Text("No devices connected")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
                 }
                 .padding(.vertical, 4)
             }
-        }
-        .listStyle(.sidebar)
-        .safeAreaInset(edge: .bottom) {
-            VStack {
-                Divider()
-                Button(action: onUpgradePro) {
-                    HStack {
-                        Image(systemName: "crown.fill")
-                            .foregroundColor(.yellow)
-                        Text("MacPhoneMirror Pro")
-                            .font(.subheadline.bold())
-                        Spacer()
+
+            if !sessions.isEmpty {
+                Section("Active Devices") {
+                    ForEach(sessions) { session in
+                        Button {
+                            onFocusSession(session.id)
+                        } label: {
+                            Label(session.device.name, systemImage: session.device.connectionType.iconName)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.06)))
                 }
-                .buttonStyle(.plain)
-                .padding(12)
             }
         }
+        .listStyle(.sidebar)
     }
 }

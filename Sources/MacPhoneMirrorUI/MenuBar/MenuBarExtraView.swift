@@ -2,14 +2,15 @@ import SwiftUI
 import MacPhoneMirrorCore
 
 public struct MenuBarExtraView: View {
+    @ObservedObject private var sessionManager = SessionManager.shared
     public let state: ConnectionState
     public let onOpenMainWindow: () -> Void
-    
+
     public init(state: ConnectionState, onOpenMainWindow: @escaping () -> Void) {
         self.state = state
         self.onOpenMainWindow = onOpenMainWindow
     }
-    
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
@@ -19,15 +20,17 @@ public struct MenuBarExtraView: View {
                 StatusBadge(state: state)
             }
             .padding(.bottom, 4)
-            
-            Divider()
-            
-            if let device = state.activeDevice {
-                Text("Mirroring: \(device.name)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
 
-                Button("Stop Mirroring") {
+            Divider()
+
+            if !sessionManager.sessions.isEmpty {
+                ForEach(sessionManager.sessions) { session in
+                    Text("Mirroring: \(session.device.name)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Button("Stop All Mirroring") {
                     SessionManager.shared.disconnect()
                 }
             } else {
@@ -35,13 +38,13 @@ public struct MenuBarExtraView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            
+
             Divider()
-            
+
             Button("Open MacPhoneMirror Window") {
                 onOpenMainWindow()
             }
-            
+
             Button("Quit MacPhoneMirror") {
                 NSApplication.shared.terminate(nil)
             }
