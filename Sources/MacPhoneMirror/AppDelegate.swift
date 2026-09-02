@@ -50,9 +50,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func logoImage() -> NSImage? {
-        let bundle = Bundle.module
-            .url(forResource: "logo", withExtension: "png", subdirectory: "Assets.xcassets/AppIcon.appiconset")
-        guard let url = bundle else { return nil }
+        guard let url = Bundle.module.url(forResource: "logo", withExtension: "png") else { return nil }
         return NSImage(contentsOf: url)
     }
 
