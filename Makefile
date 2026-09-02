@@ -8,8 +8,11 @@
 #   make format           Format all Swift code with SwiftFormat
 #   make format-lint      Format, then run SwiftLint
 #   make check            Run lint + format (read-only) check (CI-friendly)
+#   make build-release    Build in release mode
+#   make bundle           Create .app bundle (requires build-release)
+#   make dmg              Create .dmg installer (requires bundle)
 
-.PHONY: lint format format-lint check
+.PHONY: lint format format-lint check build-release bundle dmg
 
 # --disable-sourcekit lets SwiftLint run without a full Xcode install
 # (e.g. Command Line Tools only). On machines with Xcode, the extra
@@ -31,3 +34,12 @@ check:
 	@which swiftformat >/dev/null 2>&1 || (echo "SwiftFormat not installed. Run: brew install swiftformat" && exit 1)
 	swiftlint lint $(SWIFTLINT_FLAGS)
 	swiftformat --lint .
+
+build-release:
+	swift build -c release
+
+bundle:
+	@./scripts/build-app.sh
+
+dmg:
+	@./scripts/create-dmg.sh

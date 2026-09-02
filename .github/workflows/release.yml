@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g. 1.0.0)'
+        required: true
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    name: Build & Release
+    runs-on: macos-15
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Select Xcode toolchain
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            TAG="${{ github.ref_name }}"
+            VERSION="${TAG#v}"
+          elif [[ -n "${{ inputs.version }}" ]]; then
+            VERSION="${{ inputs.version }}"
+          else
+            echo "Error: Could not determine version"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Releasing version: $VERSION"
+
+      - name: Build app bundle
+        run: make bundle
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+
+      - name: Create DMG
+        run: make dmg
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          # Find the DMG file
+          DMG=$(ls dist/*.dmg | head -1)
+          if [[ -z "$DMG" ]]; then
+            echo "Error: No DMG found in dist/"
+            exit 1
+          fi
+
+          # Extract changelog entry for this version
+          NOTES=""
+          if [[ -f CHANGELOG.md ]]; then
+            NOTES=$(awk "/^## \[$VERSION\]/{found=1; next} /^## \[/{if(found) exit} found{print}" CHANGELOG.md)
+          fi
+
+          if [[ -z "$NOTES" ]]; then
+            NOTES="Release $VERSION"
+          fi
+
+          gh release create "$TAG" \
+            --title "MacPhoneMirror $VERSION" \
+            --notes "$NOTES" \
+            "$DMG#MacPhoneMirror-$VERSION.dmg"
+
+          echo "Release created: $TAG"

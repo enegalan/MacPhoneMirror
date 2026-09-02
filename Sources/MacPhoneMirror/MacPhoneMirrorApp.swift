@@ -1,3 +1,4 @@
+import AppKit
 import MacPhoneMirrorCore
 import MacPhoneMirrorUI
 import SwiftUI
@@ -5,6 +6,11 @@ import SwiftUI
 @main
 struct MacPhoneMirrorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
+    private var aboutLogo: NSImage? {
+        guard let url = Bundle.module.url(forResource: "logo", withExtension: "png") else { return nil }
+        return NSImage(contentsOf: url)
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -15,6 +21,11 @@ struct MacPhoneMirrorApp: App {
         .windowToolbarStyle(.unified(showsTitle: true))
         .commands {
             CommandGroup(replacing: .newItem) {}
+            CommandGroup(replacing: .appInfo) {
+                Button("About \(AppInfo.displayName)") {
+                    openAboutWindow()
+                }
+            }
             CommandMenu("Mirroring") {
                 Button("Go to Home Screen") {
                     Task { try? await SessionManager.shared.sendInputEvent(.homeButton) }
@@ -46,5 +57,18 @@ struct MacPhoneMirrorApp: App {
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified(showsTitle: true))
         .defaultSize(width: 480, height: 860)
+
+        WindowGroup(id: MirrorWindowID.about) {
+            AboutView(logo: aboutLogo.map { Image(nsImage: $0) })
+                .frame(minWidth: 320, minHeight: 340)
+        }
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
     }
+
+    private func openAboutWindow() {
+        openAboutWindowAction(id: MirrorWindowID.about)
+    }
+
+    @Environment(\.openWindow) private var openAboutWindowAction
 }

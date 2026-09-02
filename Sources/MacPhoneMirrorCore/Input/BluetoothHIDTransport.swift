@@ -101,7 +101,7 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
 
     public func send(_ event: PhoneInputEvent) async throws {
         guard isConnected else {
-            throw NSError(domain: "MacPhoneMirror", code: 401, userInfo: [NSLocalizedDescriptionKey: "Bluetooth HID is not connected to iPhone."])
+            throw NSError(domain: AppInfo.name, code: 401, userInfo: [NSLocalizedDescriptionKey: "Bluetooth HID is not connected to iPhone."])
         }
 
         switch event {

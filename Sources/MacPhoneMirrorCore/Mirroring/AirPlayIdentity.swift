@@ -117,7 +117,7 @@ struct AirPlayIdentity {
 }
 
 enum AirPlayTXTRecordBuilder {
-    static let serviceName = "MacPhoneMirror"
+    static let serviceName = AppInfo.displayName
 
     static func makeRecord(identity: AirPlayIdentity) -> NWTXTRecord {
         var record = NWTXTRecord()

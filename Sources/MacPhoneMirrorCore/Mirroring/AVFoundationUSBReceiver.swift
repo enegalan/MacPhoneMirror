@@ -59,7 +59,7 @@ public final class AVFoundationUSBReceiver: NSObject, ScreenMirrorReceiver, AVCa
         guard let device = chosenDevice else {
             setState(.failed("No compatible iPhone screen capture device found."))
             AppLogger.warning("No USB capture device found", category: .video)
-            throw NSError(domain: "MacPhoneMirror", code: 404, userInfo: [NSLocalizedDescriptionKey: "No compatible iPhone USB capture device found."])
+            throw NSError(domain: AppInfo.name, code: 404, userInfo: [NSLocalizedDescriptionKey: "No compatible iPhone USB capture device found."])
         }
 
         try await withCheckedThrowingContinuation { continuation in

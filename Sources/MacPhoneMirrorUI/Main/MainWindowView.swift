@@ -88,7 +88,7 @@ public struct MainWindowView: View {
             VStack(spacing: 8) {
                 Text("Waiting for iPhone")
                     .font(.title2.bold())
-                Text("On your iPhone, open Control Center → Screen Mirroring → MacPhoneMirror.\nEach connected device opens in its own window.")
+                Text("On your iPhone, open Control Center → Screen Mirroring → \(AppInfo.displayName).\nEach connected device opens in its own window.")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)

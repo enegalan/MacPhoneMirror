@@ -42,7 +42,7 @@ public struct GeneralSettingsView: View {
     public var body: some View {
         Form {
             Section(header: Text("Startup & Connection")) {
-                Toggle("Launch MacPhoneMirror at Login", isOn: $launchAtLogin)
+                Toggle("Launch \(AppInfo.displayName) at Login", isOn: $launchAtLogin)
                 Toggle("Automatically connect to last known iPhone", isOn: $autoConnect)
                 Toggle("Automatically start screen mirroring on connect", isOn: $autoStartMirroring)
             }

@@ -57,7 +57,7 @@ public enum AppLogger {
 
     private static func echoToConsole(_ message: String, category: LogCategory, level: String) {
         guard category == .airplay || category == .session || category == .network else { return }
-        let line = "[MacPhoneMirror][\(category.rawValue)][\(level)] \(message)\n"
+        let line = "[\(AppInfo.name)][\(category.rawValue)][\(level)] \(message)\n"
         if let data = line.data(using: .utf8) {
             FileHandle.standardError.write(data)
         }
