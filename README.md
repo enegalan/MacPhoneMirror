@@ -2,7 +2,7 @@
   <img src="art/logo-brand.png" alt="MacPhoneMirror" width="400"/>
 </p>
 
-# MacPhoneMirror — See your iPhone, right on your Mac
+# MacPhoneMirror
 
 [![CI](https://github.com/enegalan/MacPhoneMirror/actions/workflows/ci.yml/badge.svg)](https://github.com/enegalan/MacPhoneMirror/actions/workflows/ci.yml)
 
