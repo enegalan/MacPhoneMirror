@@ -467,15 +467,20 @@ private final class MirrorStreamSession: @unchecked Sendable {
     }
 
     private func respondStreamXML() {
+        let config = StreamConfiguration.shared
+        let size = config.quality.advertisedSize
+        let height = Int(size.height)
+        let width = Int(size.width)
+        let refreshInterval = 1.0 / Double(config.quality.maxFPS)
         let xml = """
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
         <plist version="1.0">
         <dict>
-          <key>height</key><integer>852</integer>
-          <key>width</key><integer>393</integer>
+          <key>height</key><integer>\(height)</integer>
+          <key>width</key><integer>\(width)</integer>
           <key>overscanned</key><false/>
-          <key>refreshRate</key><real>0.016666666666666666</real>
+          <key>refreshRate</key><real>\(refreshInterval)</real>
           <key>version</key><string>366.0</string>
         </dict>
         </plist>

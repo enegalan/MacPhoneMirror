@@ -63,5 +63,13 @@ if [[ -d "$EXTRA_RESOURCES" ]]; then
     echo "    Copied additional resources"
 fi
 
+echo "==> Signing app bundle (ad-hoc, no Apple Developer account required)..."
+ENTITLEMENTS="$SCRIPT_DIR/MacPhoneMirror.entitlements"
+codesign --force --deep --sign - --entitlements "$ENTITLEMENTS" "$APP_BUNDLE"
+echo "    Signed ad-hoc with entitlements"
+
+echo "==> Verifying signature..."
+codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE" 2>&1
+
 echo "==> App bundle created at: $APP_BUNDLE"
 ls -la "$APP_BUNDLE"

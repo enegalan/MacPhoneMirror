@@ -1,3 +1,4 @@
+import CoreGraphics
 import CryptoKit
 import Foundation
 import Network
@@ -87,13 +88,16 @@ struct AirPlayIdentity {
     }
 
     func fullInfoPlistData() throws -> Data {
+        let config = StreamConfiguration.shared
+        let size = config.quality.advertisedSize
+        let pixelSize = config.quality.advertisedPixelSize
         let display: [String: Any] = [
-            "width": 402,
-            "height": 874,
-            "widthPixels": 1206,
-            "heightPixels": 2622,
-            "refreshRate": 60,
-            "maxFPS": 60,
+            "width": Int(size.width),
+            "height": Int(size.height),
+            "widthPixels": Int(pixelSize.width),
+            "heightPixels": Int(pixelSize.height),
+            "refreshRate": config.quality.maxFPS,
+            "maxFPS": config.quality.maxFPS,
             "overscanned": false,
             "uuid": pairingID,
         ]
