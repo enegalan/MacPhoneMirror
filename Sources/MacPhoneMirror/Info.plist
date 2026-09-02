@@ -14,8 +14,6 @@
     <string>1.0</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
-    <key>NSHumanReadableCopyright</key>
-    <string>© 2026 MacPhoneMirror</string>
     <key>NSLocalNetworkUsageDescription</key>
     <string>MacPhoneMirror needs local network access to advertise as an AirPlay receiver so your iPhone can find it in Screen Mirroring.</string>
     <key>NSBonjourServices</key>

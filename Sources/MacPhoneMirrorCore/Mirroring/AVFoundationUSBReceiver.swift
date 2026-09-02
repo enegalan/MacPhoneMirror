@@ -37,6 +37,15 @@ public final class AVFoundationUSBReceiver: NSObject, ScreenMirrorReceiver, AVCa
         lock.unlock()
     }
 
+    private func usbPreset() -> AVCaptureSession.Preset {
+        switch StreamConfiguration.shared.quality {
+        case .ultra, .high:
+            .high
+        case .balanced, .lowBandwidth:
+            .medium
+        }
+    }
+
     public func start() async throws {
         setState(.starting)
 
@@ -67,7 +76,7 @@ public final class AVFoundationUSBReceiver: NSObject, ScreenMirrorReceiver, AVCa
                 guard let self else { return }
                 do {
                     captureSession.beginConfiguration()
-                    captureSession.sessionPreset = .high
+                    captureSession.sessionPreset = usbPreset()
 
                     let input = try AVCaptureDeviceInput(device: device)
                     if captureSession.canAddInput(input) {

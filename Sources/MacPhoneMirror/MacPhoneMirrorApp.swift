@@ -16,6 +16,7 @@ struct MacPhoneMirrorApp: App {
         WindowGroup {
             MainWindowView()
                 .frame(minWidth: 850, minHeight: 650)
+                .modifier(AboutWindowRequestBridge())
         }
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified(showsTitle: true))
@@ -23,7 +24,7 @@ struct MacPhoneMirrorApp: App {
             CommandGroup(replacing: .newItem) {}
             CommandGroup(replacing: .appInfo) {
                 Button("About \(AppInfo.displayName)") {
-                    openAboutWindow()
+                    AppWindowRequests.requestAboutWindow()
                 }
             }
             CommandMenu("Mirroring") {
@@ -45,12 +46,15 @@ struct MacPhoneMirrorApp: App {
         }
 
         WindowGroup(id: MirrorWindowID.session, for: String.self) { $sessionID in
-            if sessionID.isEmpty {
-                Text("No device session")
-                    .frame(minWidth: 320, minHeight: 240)
-            } else {
-                MirrorSessionWindow(sessionID: sessionID)
+            Group {
+                if sessionID.isEmpty {
+                    Text("No device session")
+                        .frame(minWidth: 320, minHeight: 240)
+                } else {
+                    MirrorSessionWindow(sessionID: sessionID)
+                }
             }
+            .modifier(AboutWindowRequestBridge())
         } defaultValue: {
             ""
         }
@@ -61,14 +65,19 @@ struct MacPhoneMirrorApp: App {
         WindowGroup(id: MirrorWindowID.about) {
             AboutView(logo: aboutLogo.map { Image(nsImage: $0) })
                 .frame(minWidth: 320, minHeight: 340)
+                .modifier(AboutWindowRequestBridge())
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
     }
+}
 
-    private func openAboutWindow() {
-        openAboutWindowAction(id: MirrorWindowID.about)
+private struct AboutWindowRequestBridge: ViewModifier {
+    @Environment(\.openWindow) private var openWindow
+
+    func body(content: Content) -> some View {
+        content.onReceive(AppWindowRequests.aboutWindowOpenPublisher) { _ in
+            openWindow(id: MirrorWindowID.about)
+        }
     }
-
-    @Environment(\.openWindow) private var openAboutWindowAction
 }
