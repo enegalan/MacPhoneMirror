@@ -71,5 +71,48 @@ echo "    Signed ad-hoc with entitlements"
 echo "==> Verifying signature..."
 codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE" 2>&1
 
+echo "==> Verifying embedded entitlements..."
+EMBEDDED_PLIST="$(mktemp)"
+codesign -d --entitlements "$EMBEDDED_PLIST" "$APP_BUNDLE" 2>/dev/null
+
+REQUIRED_ENTITLEMENTS=(
+    "com.apple.security.network.client"
+    "com.apple.security.network.server"
+)
+
+MISSING=0
+for entitlement in "${REQUIRED_ENTITLEMENTS[@]}"; do
+    # codesign writes a human-readable plist ([Dict]/[Key]/[Bool] format), not XML.
+    value="$(awk -v target="$entitlement" '
+        /\[Key\] / {
+            key = $0
+            sub(/^.*\[Key\] /, "", key)
+            sub(/[ \t]*$/, "", key)
+        }
+        /\[Bool\] / && key == target {
+            value = $0
+            sub(/^.*\[Bool\] /, "", value)
+            sub(/[ \t]*$/, "", value)
+            key = ""
+            print value
+            found = 1
+        }
+    ' "$EMBEDDED_PLIST")"
+
+    if [[ "$value" != "true" ]]; then
+        echo "Error: Required entitlement '$entitlement' is missing or not true." >&2
+        MISSING=1
+    else
+        echo "    Entitlement '$entitlement' = true"
+    fi
+done
+
+rm -f "$EMBEDDED_PLIST"
+
+if [[ "$MISSING" != "0" ]]; then
+    echo "Error: Signed app is missing required network entitlements." >&2
+    exit 1
+fi
+
 echo "==> App bundle created at: $APP_BUNDLE"
 ls -la "$APP_BUNDLE"
