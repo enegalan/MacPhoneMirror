@@ -1,17 +1,16 @@
 <p align="center">
   <img src="art/logo-brand.png" alt="MacPhoneMirror" width="400"/>
-</p>
-
-# MacPhoneMirror
-
-[![CI](https://github.com/enegalan/MacPhoneMirror/actions/workflows/ci.yml/badge.svg)](https://github.com/enegalan/MacPhoneMirror/actions/workflows/ci.yml)
-
-<p align="center">
+  <br>
   <strong>Mirror your iPhone's screen on your Mac — and control it with your mouse and keyboard.</strong><br/>
   A fast, native macOS app that turns your Mac into a full-size iPhone display you can actually use.
 </p>
 
 ---
+<p align="center">
+  <a href="https://github.com/enegalan/MacPhoneMirror/actions/workflows/ci.yml">
+    <img src="https://github.com/enegalan/MacPhoneMirror/actions/workflows/ci.yml/badge.svg"/>
+  </a>
+</p>
 
 ## What you can do
 
