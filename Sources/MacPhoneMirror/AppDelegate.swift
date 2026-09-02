@@ -10,7 +10,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     public func applicationDidFinishLaunching(_: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
-        AppLogger.info("MacPhoneMirror application launched successfully", category: .session)
+        AppLogger.info("\(AppInfo.displayName) application launched successfully", category: .session)
         applyAppIcon()
         setupMenuBar()
 
@@ -27,13 +27,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "MacPhoneMirror", action: nil, keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: AppInfo.displayName, action: nil, keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Open Main Window", action: #selector(openMainWindow), keyEquivalent: "o"))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(
             NSMenuItem(
-                title: "Quit MacPhoneMirror",
+                title: "Quit \(AppInfo.displayName)",
                 action: #selector(NSApplication.terminate(_:)),
                 keyEquivalent: "q"
             )

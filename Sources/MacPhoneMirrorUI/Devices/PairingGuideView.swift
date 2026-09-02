@@ -14,7 +14,7 @@ public struct PairingGuideView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Connection & Pairing Guide")
                         .font(.headline)
-                    Text("Follow these steps to connect your iPhone to MacPhoneMirror.")
+                    Text("Follow these steps to connect your iPhone to \(AppInfo.displayName).")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -56,19 +56,19 @@ public struct PairingGuideView: View {
         VStack(alignment: .leading, spacing: 16) {
             stepItem(number: "1", title: "Connect via USB-C or Lightning Cable", detail: "Plug your iPhone directly into your Mac using an Apple certified data cable.")
             stepItem(number: "2", title: "Trust This Computer", detail: "Unlock your iPhone. If prompted, tap 'Trust This Computer' and enter your passcode.")
-            stepItem(number: "3", title: "Hardware-Accelerated Zero Lag Mirroring", detail: "MacPhoneMirror uses native AVFoundation USB capture to deliver 60 FPS video at sub-10ms latency.")
+            stepItem(number: "3", title: "Hardware-Accelerated Zero Lag Mirroring", detail: "\(AppInfo.displayName) uses native AVFoundation USB capture to deliver 60 FPS video at sub-10ms latency.")
         }
     }
 
     private var wifiGuide: some View {
         VStack(alignment: .leading, spacing: 16) {
             // swiftlint:disable:next line_length
-            stepItem(number: "1", title: "Allow Local Network Access", detail: "When macOS prompts, allow MacPhoneMirror to use the local network. Without this, your iPhone cannot discover the AirPlay receiver.")
+            stepItem(number: "1", title: "Allow Local Network Access", detail: "When macOS prompts, allow \(AppInfo.displayName) to use the local network. Without this, your iPhone cannot discover the AirPlay receiver.")
             stepItem(number: "2", title: "Same Wi-Fi Network", detail: "Ensure both your Mac and iPhone are connected to the same Wi-Fi network.")
             stepItem(number: "3", title: "Open Control Center on iPhone", detail: "Swipe down from the top right corner of your iPhone screen to open Control Center.")
-            stepItem(number: "4", title: "Tap Screen Mirroring", detail: "Select 'MacPhoneMirror' from the list of available AirPlay receivers.")
+            stepItem(number: "4", title: "Tap Screen Mirroring", detail: "Select '\(AppInfo.displayName)' from the list of available AirPlay receivers.")
             // swiftlint:disable:next line_length
-            stepItem(number: "5", title: "AirPlay Receiver Conflict", detail: "If MacPhoneMirror does not appear, disable macOS AirPlay Receiver in System Settings > General > AirDrop & Handoff > AirPlay Receiver.")
+            stepItem(number: "5", title: "AirPlay Receiver Conflict", detail: "If \(AppInfo.displayName) does not appear, disable macOS AirPlay Receiver in System Settings > General > AirDrop & Handoff > AirPlay Receiver.")
         }
     }
 
@@ -76,7 +76,7 @@ public struct PairingGuideView: View {
         VStack(alignment: .leading, spacing: 16) {
             stepItem(number: "1", title: "Enable Bluetooth on Mac & iPhone", detail: "Make sure Bluetooth is powered on in macOS and iOS Settings.")
             stepItem(number: "2", title: "Enable AssistiveTouch on iPhone", detail: "On iPhone, go to Settings > Accessibility > Touch > AssistiveTouch and toggle it ON.")
-            stepItem(number: "3", title: "Pair Pointer Device", detail: "In Settings > Accessibility > Touch > AssistiveTouch > Devices > Bluetooth Devices, select MacPhoneMirror to pair.")
+            stepItem(number: "3", title: "Pair Pointer Device", detail: "In Settings > Accessibility > Touch > AssistiveTouch > Devices > Bluetooth Devices, select \(AppInfo.displayName) to pair.")
         }
     }
 

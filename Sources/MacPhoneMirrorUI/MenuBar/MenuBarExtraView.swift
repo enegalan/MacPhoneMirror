@@ -14,7 +14,7 @@ public struct MenuBarExtraView: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("MacPhoneMirror")
+                Text(AppInfo.displayName)
                     .font(.headline)
                 Spacer()
                 StatusBadge(state: state)
@@ -41,11 +41,11 @@ public struct MenuBarExtraView: View {
 
             Divider()
 
-            Button("Open MacPhoneMirror Window") {
+            Button("Open \(AppInfo.displayName) Window") {
                 onOpenMainWindow()
             }
 
-            Button("Quit MacPhoneMirror") {
+            Button("Quit \(AppInfo.displayName)") {
                 NSApplication.shared.terminate(nil)
             }
         }

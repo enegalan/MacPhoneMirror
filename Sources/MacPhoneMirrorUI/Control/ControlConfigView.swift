@@ -104,7 +104,7 @@ public struct AssistiveTouchGuideView: View {
                     guideStep(1, "Open iOS Settings", "On your iPhone, open the standard Settings app.")
                     guideStep(2, "Navigate to Accessibility", "Tap Accessibility > Touch > AssistiveTouch.")
                     guideStep(3, "Enable AssistiveTouch", "Turn the main toggle ON. You will see the circular touch button.")
-                    guideStep(4, "Configure Pointer Devices", "Tap Pointer Devices > Bluetooth Devices, and choose MacPhoneMirror.")
+                    guideStep(4, "Configure Pointer Devices", "Tap Pointer Devices > Bluetooth Devices, and choose \(AppInfo.displayName).")
                     guideStep(5, "Enjoy Full Control", "You can now click, drag, scroll, type, and navigate your iPhone smoothly from your Mac!")
                 }
                 .padding(24)

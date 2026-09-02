@@ -18,4 +18,5 @@ public struct MirrorSession: Identifiable, Hashable, Sendable {
 
 public enum MirrorWindowID {
     public static let session = "mirror-session"
+    public static let about = "about"
 }

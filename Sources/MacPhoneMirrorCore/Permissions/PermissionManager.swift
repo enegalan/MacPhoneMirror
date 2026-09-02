@@ -19,7 +19,7 @@ public enum SystemPermission: String, CaseIterable, Identifiable, Sendable {
         case .localNetwork:
             "Required to discover iPhones advertising AirPlay / Bonjour services on your local Wi-Fi network."
         case .bluetooth:
-            "Required to pair MacPhoneMirror as a Bluetooth HID device for mouse and keyboard control."
+            "Required to pair \(AppInfo.displayName) as a Bluetooth HID device for mouse and keyboard control."
         case .cameraAndCapture:
             "Required by macOS AVFoundation to access tethered iPhone video streams via USB."
         case .accessibility:
