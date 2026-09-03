@@ -14,7 +14,7 @@ struct MacPhoneMirrorApp: App {
 
     private var menuBarLogo: NSImage? {
         guard let image = aboutLogo else { return nil }
-        image.size = NSSize(width: 18, height: 18)
+        image.size = NSSize(width: 24, height: 24)
         image.isTemplate = true
         return image
     }
