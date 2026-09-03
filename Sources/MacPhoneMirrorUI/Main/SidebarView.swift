@@ -42,24 +42,10 @@ public struct SidebarView: View {
 
     public var body: some View {
         List(selection: $selectedTab) {
-            Section("Features") {
-                ForEach(AppNavigationTab.allCases) { tab in
-                    NavigationLink(value: tab) {
-                        Label(tab.rawValue, systemImage: tab.icon)
-                    }
+            ForEach(AppNavigationTab.allCases) { tab in
+                NavigationLink(value: tab) {
+                    Label(tab.rawValue, systemImage: tab.icon)
                 }
-            }
-
-            Section("Session Status") {
-                VStack(alignment: .leading, spacing: 6) {
-                    StatusBadge(state: activeState)
-                    if sessions.isEmpty {
-                        Text("No devices connected")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .padding(.vertical, 4)
             }
 
             if !sessions.isEmpty {

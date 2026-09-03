@@ -3,11 +3,9 @@ import SwiftUI
 
 public struct MenuBarExtraView: View {
     @ObservedObject private var sessionManager = SessionManager.shared
-    public let state: ConnectionState
     public let onOpenMainWindow: () -> Void
 
-    public init(state: ConnectionState, onOpenMainWindow: @escaping () -> Void) {
-        self.state = state
+    public init(onOpenMainWindow: @escaping () -> Void) {
         self.onOpenMainWindow = onOpenMainWindow
     }
 
@@ -17,7 +15,6 @@ public struct MenuBarExtraView: View {
                 Text(AppInfo.displayName)
                     .font(.headline)
                 Spacer()
-                StatusBadge(state: state)
             }
             .padding(.bottom, 4)
 

@@ -95,8 +95,6 @@ public struct MainWindowView: View {
                     .frame(maxWidth: 420)
             }
 
-            StatusBadge(state: sessionManager.state)
-
             if !sessionManager.sessions.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Active devices")
