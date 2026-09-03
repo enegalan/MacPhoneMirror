@@ -47,8 +47,10 @@ public struct MenuBarExtraView: View {
         let shouldPulse = sessionManager.isServiceEnabled
             && sessionManager.sessions.isEmpty
             && !isFailedState
-        withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-            isPulsing = shouldPulse
+        if shouldPulse != isPulsing {
+            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                isPulsing = shouldPulse
+            }
         }
     }
 
@@ -185,7 +187,7 @@ public struct MenuBarExtraView: View {
 
     private func focusSession(_ session: MirrorSession) {
         NSApp.activate(ignoringOtherApps: true)
-        if let window = NSApp.windows.first(where: { $0.title == session.device.name }) {
+        if let window = NSApp.windows.first(where: { $0.title == session.device.name && $0.isVisible && !($0 is NSPanel) }) {
             window.makeKeyAndOrderFront(NSApp)
         } else {
             openWindow(id: MirrorWindowID.session, value: session.id)
