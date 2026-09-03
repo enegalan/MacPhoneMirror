@@ -12,8 +12,15 @@ struct MacPhoneMirrorApp: App {
         return NSImage(contentsOf: url)
     }
 
+    private var menuBarLogo: NSImage? {
+        guard let image = aboutLogo else { return nil }
+        image.size = NSSize(width: 18, height: 18)
+        image.isTemplate = true
+        return image
+    }
+
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: MirrorWindowID.main) {
             MainWindowView()
                 .frame(minWidth: 850, minHeight: 650)
         }
@@ -44,6 +51,17 @@ struct MacPhoneMirrorApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
+
+        MenuBarExtra {
+            MenuBarExtraView()
+        } label: {
+            if let logo = menuBarLogo {
+                Image(nsImage: logo)
+            } else {
+                Image(systemName: "airplayvideo")
+            }
+        }
+        .menuBarExtraStyle(.window)
     }
 }
 
