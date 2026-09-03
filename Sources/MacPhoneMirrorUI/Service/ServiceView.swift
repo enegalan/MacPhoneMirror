@@ -4,7 +4,8 @@ import SwiftUI
 public struct ServiceView: View {
     @ObservedObject private var sessionManager = SessionManager.shared
     @State private var serviceName: String = AirPlayTXTRecordBuilder.serviceName
-    @State private var serviceNameDebounceTask: Task<Void, Never>?
+    @State private var isEditingName = false
+    @State private var isSavingName = false
 
     public init() {}
 
@@ -75,22 +76,58 @@ public struct ServiceView: View {
                         .foregroundColor(.secondary)
                 }
                 Spacer()
-                TextField("Device Name", text: $serviceName)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: 200)
-                    .onChange(of: serviceName) { _, newValue in
-                        serviceNameDebounceTask?.cancel()
-                        serviceNameDebounceTask = Task {
-                            try? await Task.sleep(for: .seconds(0.5))
-                            guard !Task.isCancelled else { return }
-                            await sessionManager.updateServiceName(newValue)
+
+                if isEditingName {
+                    TextField("Device Name", text: $serviceName)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: 200)
+                        .onSubmit {
+                            confirmNameChange()
                         }
-                    }
+                } else {
+                    Text(serviceName)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                }
+
+                if isEditingName {
+                    SubtleIconButton(systemName: "checkmark", action: confirmNameChange)
+                        .disabled(isSavingName)
+                } else {
+                    SubtleIconButton(systemName: "pencil", action: beginEditing)
+                }
+
+                if isSavingName {
+                    ProgressView()
+                        .controlSize(.small)
+                }
             }
             .padding(.vertical, 6)
         }
         .onAppear {
             serviceName = AirPlayTXTRecordBuilder.serviceName
+        }
+    }
+
+    private func beginEditing() {
+        isEditingName = true
+    }
+
+    private func confirmNameChange() {
+        let trimmed = serviceName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        let newValue = trimmed
+        isEditingName = false
+        isSavingName = true
+
+        Task {
+            await sessionManager.updateServiceName(newValue)
+            await MainActor.run {
+                isSavingName = false
+                serviceName = AirPlayTXTRecordBuilder.serviceName
+            }
         }
     }
 
@@ -134,6 +171,31 @@ public struct ServiceView: View {
                             .fill(Color.primary.opacity(0.03))
                     )
                 }
+            }
+        }
+    }
+}
+
+private struct SubtleIconButton: View {
+    let systemName: String
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(isHovered ? .white : .secondary)
+                .frame(width: 24, height: 24)
+                .background(
+                    Circle()
+                        .fill(isHovered ? Color.accentColor.opacity(0.7) : Color.primary.opacity(0.06))
+                )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.12)) {
+                isHovered = hovering
             }
         }
     }

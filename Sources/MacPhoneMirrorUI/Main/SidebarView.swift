@@ -51,16 +51,40 @@ public struct SidebarView: View {
             if !sessions.isEmpty {
                 Section("Active Devices") {
                     ForEach(sessions) { session in
-                        Button {
+                        SidebarDeviceButton(
+                            name: session.device.name,
+                            icon: session.device.connectionType.iconName
+                        ) {
                             onFocusSession(session.id)
-                        } label: {
-                            Label(session.device.name, systemImage: session.device.connectionType.iconName)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
         }
         .listStyle(.sidebar)
+    }
+}
+
+private struct SidebarDeviceButton: View {
+    let name: String
+    let icon: String
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Label(name, systemImage: icon)
+                .foregroundColor(isHovered ? .primary : .secondary)
+        }
+        .buttonStyle(.plain)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(isHovered ? Color.accentColor.opacity(0.1) : Color.clear)
+        )
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
     }
 }

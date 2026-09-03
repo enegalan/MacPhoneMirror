@@ -3,7 +3,7 @@ import MacPhoneMirrorCore
 import SwiftUI
 
 public struct MainWindowView: View {
-    @State private var selectedTab: AppNavigationTab = .control
+    @State private var selectedTab: AppNavigationTab = .allCases.first!
     @State private var frameStyle = FrameRenderStyle.standard
 
     @ObservedObject private var sessionManager = SessionManager.shared
