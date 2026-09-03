@@ -126,7 +126,9 @@ public enum AirPlayTXTRecordBuilder {
     public static var serviceName: String {
         get {
             let stored = UserDefaults.standard.string(forKey: serviceNameKey)
-            if let stored, !stored.isEmpty { return stored }
+            if let stored, !stored.isEmpty {
+                return stored
+            }
             return AppInfo.displayName
         }
         set {
