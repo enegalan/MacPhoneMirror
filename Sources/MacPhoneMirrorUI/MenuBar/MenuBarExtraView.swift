@@ -115,7 +115,7 @@ public struct MenuBarExtraView: View {
             Spacer(minLength: 8)
 
             Toggle(
-                "",
+                "AirPlay service",
                 isOn: Binding(
                     get: { sessionManager.isServiceEnabled },
                     set: { sessionManager.setServiceEnabled($0) }
@@ -176,8 +176,7 @@ public struct MenuBarExtraView: View {
 
     private func openMainWindow() {
         NSApp.activate(ignoringOtherApps: true)
-        let mainWindows = NSApp.windows.filter { $0.isMainWindow || (!($0 is NSPanel) && $0.isVisible) }
-        if let window = mainWindows.first {
+        if let window = NSApp.windows.first(where: { $0.identifier?.rawValue.starts(with: MirrorWindowID.main) == true && $0.isVisible && !($0 is NSPanel) }) {
             window.makeKeyAndOrderFront(NSApp)
         } else {
             openWindow(id: MirrorWindowID.main)
@@ -187,7 +186,7 @@ public struct MenuBarExtraView: View {
 
     private func focusSession(_ session: MirrorSession) {
         NSApp.activate(ignoringOtherApps: true)
-        if let window = NSApp.windows.first(where: { $0.title == session.device.name && $0.isVisible && !($0 is NSPanel) }) {
+        if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "mirror-session-\(session.id)" && $0.isVisible && !($0 is NSPanel) }) {
             window.makeKeyAndOrderFront(NSApp)
         } else {
             openWindow(id: MirrorWindowID.session, value: session.id)
