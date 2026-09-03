@@ -8,11 +8,6 @@ struct MacPhoneMirrorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @ObservedObject private var sessionManager = SessionManager.shared
 
-    private var aboutLogo: NSImage? {
-        guard let url = Bundle.module.url(forResource: "logo", withExtension: "png") else { return nil }
-        return NSImage(contentsOf: url)
-    }
-
     private var menuBarStatusImage: NSImage? {
         MenuBarStatusIcon.image(
             for: sessionManager.isServiceEnabled,
@@ -48,7 +43,7 @@ struct MacPhoneMirrorApp: App {
         .defaultSize(width: 480, height: 860)
 
         WindowGroup(id: MirrorWindowID.about) {
-            AboutView(logo: aboutLogo.map { Image(nsImage: $0) })
+            AboutView(logo: AppResources.image(forResource: "logo", withExtension: "png").map { Image(nsImage: $0) })
                 .frame(minWidth: 320, minHeight: 340)
         }
         .windowStyle(.hiddenTitleBar)

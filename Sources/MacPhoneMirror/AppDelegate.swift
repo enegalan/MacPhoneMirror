@@ -14,13 +14,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func logoImage() -> NSImage? {
-        guard let url = Bundle.module.url(forResource: "logo", withExtension: "png") else { return nil }
-        return NSImage(contentsOf: url)
-    }
-
     private func applyAppIcon() {
-        if let image = logoImage() {
+        if let image = AppResources.image(forResource: "logo", withExtension: "png") {
             NSApp.applicationIconImage = image
         }
     }

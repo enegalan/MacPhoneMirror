@@ -40,18 +40,37 @@ if [[ -n "${VERSION:-}" ]]; then
     echo "    Version set to $VERSION (build $BUILD_NUM)"
 fi
 
-# Copy processed resources (SPM places them in a .bundle directory)
+# Copy processed resources (SPM places them in a .bundle directory).
+# We rely on a custom resource loader that checks Bundle.main (Contents/Resources)
+# first and Bundle.module (SPM dev bundle) as a fallback. The .bundle is kept in
+# Contents/Resources so the code signature stays valid (no unsealed root contents).
 RESOURCE_BUNDLE="$BUILD_DIR/${APP_NAME}_${APP_NAME}.bundle"
 if [[ -d "$RESOURCE_BUNDLE" ]]; then
     cp -R "$RESOURCE_BUNDLE" "$APP_BUNDLE/Contents/Resources/"
-    echo "    Copied SPM resource bundle"
+    echo "    Copied SPM resource bundle to Contents/Resources"
 fi
 
-# Copy Assets.xcassets directly if it exists as a raw directory
-ASSETS_SRC="$PROJECT_ROOT/Sources/MacPhoneMirror/Assets.xcassets"
-if [[ -d "$ASSETS_SRC" ]]; then
-    cp -R "$ASSETS_SRC" "$APP_BUNDLE/Contents/Resources/"
-    echo "    Copied Assets.xcassets"
+# Build a proper AppIcon.icns from the logo and register it in Info.plist so
+# the Finder / Dock shows the app icon. SPM does not compile .xcassets into an
+# .icns, and without CFBundleIconFile the icon is missing.
+ICON_SRC="$PROJECT_ROOT/Sources/MacPhoneMirror/Resources/logo.png"
+if [[ -f "$ICON_SRC" ]]; then
+    ICONSET="$(mktemp -d)/AppIcon.iconset"
+    mkdir -p "$ICONSET"
+    # mac icon sizes: icon_16x16(,@2x), icon_32x32(,@2x), icon_128x128(,@2x), icon_256x256(,@2x), icon_512x512(,@2x)
+    for size in 16 32 128 256 512; do
+        sips -z "$size" "$size" "$ICON_SRC" --out "$ICONSET/icon_${size}x${size}.png" >/dev/null 2>&1
+        double=$((size * 2))
+        sips -z "$double" "$double" "$ICON_SRC" --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null 2>&1
+    done
+    if iconutil -c icns "$ICONSET" -o "$APP_BUNDLE/Contents/Resources/AppIcon.icns" 2>/dev/null; then
+        echo "    Generated AppIcon.icns"
+        /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile AppIcon" "$PLIST_DST" 2>/dev/null \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$PLIST_DST"
+    else
+        echo "    Warning: could not generate AppIcon.icns"
+    fi
+    rm -rf "$(dirname "$ICONSET")"
 fi
 
 # Copy any additional resources
