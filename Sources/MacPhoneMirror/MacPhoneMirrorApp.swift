@@ -6,17 +6,19 @@ import SwiftUI
 @main
 struct MacPhoneMirrorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @ObservedObject private var sessionManager = SessionManager.shared
 
     private var aboutLogo: NSImage? {
         guard let url = Bundle.module.url(forResource: "logo", withExtension: "png") else { return nil }
         return NSImage(contentsOf: url)
     }
 
-    private var menuBarLogo: NSImage? {
-        guard let image = aboutLogo else { return nil }
-        image.size = NSSize(width: 24, height: 24)
-        image.isTemplate = true
-        return image
+    private var menuBarStatusImage: NSImage? {
+        MenuBarStatusIcon.image(
+            for: sessionManager.isServiceEnabled,
+            sessions: sessionManager.sessions.count,
+            state: sessionManager.state
+        )
     }
 
     var body: some Scene {
@@ -55,8 +57,8 @@ struct MacPhoneMirrorApp: App {
         MenuBarExtra {
             MenuBarExtraView()
         } label: {
-            if let logo = menuBarLogo {
-                Image(nsImage: logo)
+            if let image = menuBarStatusImage {
+                Image(nsImage: image)
             } else {
                 Image(systemName: "airplayvideo")
             }
