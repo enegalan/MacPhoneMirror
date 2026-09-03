@@ -6,13 +6,12 @@ enum MenuBarStatusIcon {
     static func image(for serviceEnabled: Bool, sessions: Int, state: ConnectionState) -> NSImage? {
         guard let base = logoImage() else { return nil }
 
-        let indicatorColor: NSColor
-        if sessions > 0 {
-            indicatorColor = .systemGreen
+        let indicatorColor: NSColor = if sessions > 0 {
+            .systemGreen
         } else if case .failed = state {
-            indicatorColor = .systemRed
+            .systemRed
         } else {
-            indicatorColor = .white
+            .white
         }
 
         return compositedMenuBarImage(
