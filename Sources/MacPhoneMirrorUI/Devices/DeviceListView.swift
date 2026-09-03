@@ -103,13 +103,8 @@ public struct DeviceListView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        Text(device.name)
-                            .font(.headline)
-                        if isConnected {
-                            StatusBadge(state: activeState)
-                        }
-                    }
+                    Text(device.name)
+                        .font(.headline)
 
                     HStack(spacing: 12) {
                         Label(device.model.rawValue, systemImage: "info.circle")
