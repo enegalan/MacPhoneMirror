@@ -120,8 +120,19 @@ struct AirPlayIdentity {
     }
 }
 
-enum AirPlayTXTRecordBuilder {
-    static let serviceName = AppInfo.displayName
+public enum AirPlayTXTRecordBuilder {
+    private static let serviceNameKey = "airplay.serviceName"
+
+    public static var serviceName: String {
+        get {
+            let stored = UserDefaults.standard.string(forKey: serviceNameKey)
+            if let stored, !stored.isEmpty { return stored }
+            return AppInfo.displayName
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: serviceNameKey)
+        }
+    }
 
     static func makeRecord(identity: AirPlayIdentity) -> NWTXTRecord {
         var record = NWTXTRecord()

@@ -2,7 +2,7 @@ import MacPhoneMirrorCore
 import SwiftUI
 
 public enum AppNavigationTab: String, CaseIterable, Identifiable {
-    case mirror = "Mirroring"
+    case service = "Service"
     case control = "Control"
     case settings = "Settings"
 
@@ -12,8 +12,8 @@ public enum AppNavigationTab: String, CaseIterable, Identifiable {
 
     public var icon: String {
         switch self {
-        case .mirror:
-            "display"
+        case .service:
+            "airplayvideo"
         case .control:
             "cursorarrow.motionlines"
         case .settings:

@@ -22,22 +22,6 @@ struct MacPhoneMirrorApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {}
             AboutCommands()
-            CommandMenu("Mirroring") {
-                Button("Go to Home Screen") {
-                    Task { try? await SessionManager.shared.sendInputEvent(.homeButton) }
-                }
-                .keyboardShortcut("h", modifiers: .command)
-
-                Button("App Switcher") {
-                    Task { try? await SessionManager.shared.sendInputEvent(.appSwitcher) }
-                }
-                .keyboardShortcut(.tab, modifiers: .command)
-
-                Button("Lock Screen") {
-                    Task { try? await SessionManager.shared.sendInputEvent(.lockScreen) }
-                }
-                .keyboardShortcut(.escape, modifiers: [])
-            }
         }
 
         WindowGroup(id: MirrorWindowID.session, for: String.self) { $sessionID in

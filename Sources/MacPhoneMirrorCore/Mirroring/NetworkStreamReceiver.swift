@@ -213,6 +213,11 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
         AppLogger.info("AirPlay receiver stopped", category: .airplay)
     }
 
+    public func restart() async throws {
+        stop()
+        try await start()
+    }
+
     public func decoder(_: VideoDecoder, didOutputPixelBuffer pixelBuffer: CVPixelBuffer, presentationTime: CMTime) {
         let width = CVPixelBufferGetWidth(pixelBuffer)
         let height = CVPixelBufferGetHeight(pixelBuffer)

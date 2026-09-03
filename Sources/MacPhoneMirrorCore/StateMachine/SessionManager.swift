@@ -9,6 +9,7 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
     @Published public var sessions: [MirrorSession] = []
     @Published public var orientation: DeviceOrientation = .portrait
     @Published public var statistics: StreamStatistics = .init()
+    @Published public var isServiceEnabled: Bool = true
 
     public let sessionWindowOpenPublisher = PassthroughSubject<String, Never>()
     public let sessionWindowClosePublisher = PassthroughSubject<String, Never>()
@@ -66,6 +67,8 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
     }
 
     public init() {
+        isServiceEnabled = UserDefaults.standard.object(forKey: "airplay.serviceEnabled") as? Bool ?? true
+
         stateSubject
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newState in
@@ -258,6 +261,11 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
             return
         }
 
+        guard isServiceEnabled else {
+            AppLogger.info("AirPlay service is disabled; skipping start.", category: .session)
+            return
+        }
+
         setState(.discovering)
         PermissionManager.shared.requestLocalNetworkPermission()
 
@@ -412,6 +420,37 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         }
         if ids.isEmpty {
             setState(.discovering)
+        }
+    }
+
+    // MARK: - Service Management
+
+    public func setServiceEnabled(_ enabled: Bool) {
+        guard enabled != isServiceEnabled else { return }
+        isServiceEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: "airplay.serviceEnabled")
+
+        if enabled {
+            Task { await startListening() }
+        } else {
+            NetworkStreamReceiver.shared.stop()
+            disconnect()
+            AppLogger.info("AirPlay service disabled by user", category: .session)
+        }
+    }
+
+    public func updateServiceName(_ newName: String) async {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != AirPlayTXTRecordBuilder.serviceName else { return }
+        AirPlayTXTRecordBuilder.serviceName = trimmed
+
+        if isServiceEnabled, NetworkStreamReceiver.shared.isAdvertising {
+            do {
+                try await NetworkStreamReceiver.shared.restart()
+                AppLogger.info("AirPlay service restarted with name: \(trimmed)", category: .session)
+            } catch {
+                AppLogger.error("Failed to restart AirPlay service: \(error.localizedDescription)", category: .session)
+            }
         }
     }
 
