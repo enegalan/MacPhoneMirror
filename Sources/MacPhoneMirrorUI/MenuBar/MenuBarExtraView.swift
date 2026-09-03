@@ -47,11 +47,7 @@ public struct MenuBarExtraView: View {
         let shouldPulse = sessionManager.isServiceEnabled
             && sessionManager.sessions.isEmpty
             && !isFailedState
-        if shouldPulse != isPulsing {
-            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-                isPulsing = shouldPulse
-            }
-        }
+        isPulsing = shouldPulse
     }
 
     private var isFailedState: Bool {
@@ -93,6 +89,7 @@ public struct MenuBarExtraView: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(serviceIconColor)
                     .opacity(isPulsing ? 0.35 : 1.0)
+                    .animation(isPulsing ? .easeInOut(duration: 1.2).repeatForever(autoreverses: true) : .default, value: isPulsing)
             }
 
             VStack(alignment: .leading, spacing: 2) {
