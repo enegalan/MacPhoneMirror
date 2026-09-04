@@ -392,7 +392,9 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
                     return
                 }
             }
-            if !sentAny { break }
+            if !sentAny {
+                break
+            }
         }
     }
 
