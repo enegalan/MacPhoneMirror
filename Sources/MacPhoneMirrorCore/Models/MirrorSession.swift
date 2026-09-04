@@ -20,4 +20,5 @@ public enum MirrorWindowID {
     public static let main = "main"
     public static let session = "mirror-session"
     public static let about = "about"
+    public static let testPattern = "test-pattern"
 }

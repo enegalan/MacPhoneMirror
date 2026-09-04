@@ -425,6 +425,31 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
 
     // MARK: - Service Management
 
+    /// Starts a synthetic 60 FPS test-pattern session that runs through the exact
+    /// same Metal render path as a real AirPlay stream. Use this to diagnose
+    /// rendering issues (e.g. black screen in the packaged .app) without an iPhone:
+    /// if the test pattern also appears black, the problem is in the render path;
+    /// if it renders, the problem is in the AirPlay H.264 decode path.
+    @discardableResult
+    public func startTestPattern() -> String? {
+        let receiver = TestPatternReceiver()
+        let device = PhoneDevice(
+            id: "test-pattern",
+            name: "Test Pattern",
+            model: .iPhone16Pro,
+            connectionType: .simulated,
+            isPairedForControl: false
+        )
+        let sessionID = beginMirroringSession(
+            device: device,
+            receiver: receiver,
+            transport: SimulatedInputTransport(),
+            replaceExistingAirPlay: false
+        )
+        Task { try? await receiver.start() }
+        return sessionID
+    }
+
     public func setServiceEnabled(_ enabled: Bool) {
         guard enabled != isServiceEnabled else { return }
         isServiceEnabled = enabled

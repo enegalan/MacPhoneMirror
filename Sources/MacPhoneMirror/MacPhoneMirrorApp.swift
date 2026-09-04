@@ -16,10 +16,15 @@ struct MacPhoneMirrorApp: App {
         )
     }
 
+    private var aboutLogo: NSImage? {
+        AppResources.image(forResource: "logo", withExtension: "png")
+    }
+
     var body: some Scene {
         WindowGroup(id: MirrorWindowID.main) {
             MainWindowView()
                 .frame(minWidth: 850, minHeight: 650)
+                .background(DiagnosticAutoLauncher())
         }
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified(showsTitle: true))
@@ -43,11 +48,31 @@ struct MacPhoneMirrorApp: App {
         .defaultSize(width: 480, height: 860)
 
         WindowGroup(id: MirrorWindowID.about) {
-            AboutView(logo: AppResources.image(forResource: "logo", withExtension: "png").map { Image(nsImage: $0) })
+            AboutView(logo: aboutLogo.map { Image(nsImage: $0) })
                 .frame(minWidth: 320, minHeight: 340)
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
+
+        WindowGroup(id: MirrorWindowID.testPattern, for: String.self) { $sessionID in
+            if let sessionID,
+               let session = SessionManager.shared.session(id: sessionID)
+            {
+                MirrorViewportView(
+                    sessionID: session.id,
+                    device: session.device,
+                    orientation: session.orientation
+                )
+                .frame(minWidth: 420, minHeight: 720)
+                .onDisappear {
+                    SessionManager.shared.disconnect(sessionID: sessionID)
+                }
+            } else {
+                Text("Test pattern not available")
+                    .frame(minWidth: 420, minHeight: 720)
+            }
+        }
+        .windowStyle(.titleBar)
 
         MenuBarExtra {
             MenuBarExtraView()
@@ -71,5 +96,27 @@ private struct AboutCommands: Commands {
                 openWindow(id: MirrorWindowID.about)
             }
         }
+    }
+}
+
+/// When launched with `--test-pattern`, automatically starts the synthetic
+/// test-pattern session and opens its window. Used to diagnose whether a
+/// black screen lives in the Metal render path or the AirPlay decode path.
+private struct DiagnosticAutoLauncher: View {
+    @Environment(\.openWindow) private var openWindow
+    @State private var didLaunch = false
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .onAppear {
+                guard !didLaunch else { return }
+                didLaunch = true
+                if CommandLine.arguments.contains("--test-pattern") {
+                    if let sessionID = SessionManager.shared.startTestPattern() {
+                        openWindow(id: MirrorWindowID.testPattern, value: sessionID)
+                    }
+                }
+            }
     }
 }

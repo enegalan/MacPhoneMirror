@@ -28,6 +28,9 @@ public struct MenuBarExtraView: View {
                 MenuActionButton(title: "Open \(AppInfo.displayName)", systemImage: "macwindow") {
                     openMainWindow()
                 }
+                MenuActionButton(title: "Test Pattern (Diagnostic)", systemImage: "display") {
+                    openTestPattern()
+                }
                 MenuActionButton(title: "Quit \(AppInfo.displayName)", systemImage: "power") {
                     NSApplication.shared.terminate(nil)
                 }
@@ -177,6 +180,14 @@ public struct MenuBarExtraView: View {
             window.makeKeyAndOrderFront(NSApp)
         } else {
             openWindow(id: MirrorWindowID.main)
+        }
+        dismiss()
+    }
+
+    private func openTestPattern() {
+        NSApp.activate(ignoringOtherApps: true)
+        if let sessionID = sessionManager.startTestPattern() {
+            openWindow(id: MirrorWindowID.testPattern, value: sessionID)
         }
         dismiss()
     }
