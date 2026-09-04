@@ -748,5 +748,6 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
         isFinished = true
         cancelIdleLog()
         onSessionEnded?()
+        connection.cancel()
     }
 }

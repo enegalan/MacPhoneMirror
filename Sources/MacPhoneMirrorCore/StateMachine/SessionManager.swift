@@ -2,6 +2,7 @@ import Combine
 import CoreGraphics
 import Foundation
 
+// swiftlint:disable:next type_body_length
 public final class SessionManager: ObservableObject, @unchecked Sendable {
     public static let shared = SessionManager()
 
@@ -28,6 +29,7 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
     private let lock = NSLock()
     private var statsTimer: Timer?
     private var isListening = false
+    private var didSetupUSBAutoConnect = false
     private var connectedUSBDeviceID: String?
 
     public var statePublisher: AnyPublisher<ConnectionState, Never> {
@@ -250,6 +252,12 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         lock.unlock()
     }
 
+    private func markListeningStopped() {
+        lock.lock()
+        isListening = false
+        lock.unlock()
+    }
+
     private func isAlreadyListening() -> Bool {
         lock.lock()
         defer { lock.unlock() }
@@ -275,6 +283,7 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
             markListeningStarted()
             AppLogger.info("AirPlay receiver ready. Waiting for iPhone to connect.", category: .session)
         } catch {
+            markListeningStopped()
             let message = "Could not start AirPlay receiver: \(error.localizedDescription)"
             AppLogger.error(message, category: .session)
             setState(.failed(message))
@@ -293,7 +302,21 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         setupUSBAutoConnect()
     }
 
+    private func stopListening() {
+        markListeningStopped()
+        NetworkStreamReceiver.shared.stop()
+        BluetoothHIDTransport.shared.stopAdvertising()
+        disconnect()
+        setState(.disconnected)
+        AppLogger.info("AirPlay service disabled by user", category: .session)
+    }
+
     private func setupUSBAutoConnect() {
+        guard !didSetupUSBAutoConnect else {
+            usbDiscovery.start()
+            return
+        }
+        didSetupUSBAutoConnect = true
         usbDiscovery.start()
         usbDiscovery.devicesPublisher
             .receive(on: DispatchQueue.main)
@@ -452,10 +475,7 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         if enabled {
             Task { await startListening() }
         } else {
-            NetworkStreamReceiver.shared.stop()
-            BluetoothHIDTransport.shared.stopAdvertising()
-            disconnect()
-            AppLogger.info("AirPlay service disabled by user", category: .session)
+            stopListening()
         }
     }
 
