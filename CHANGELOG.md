@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.5] - 2026-09-04
+
+### Fixed
+
+- AirPlay service toggle can re-enable advertising after disable (listening flag was never cleared)
+- Stale AirPlay session keys / open connections no longer linger after disconnect or service stop
+- Listener cancel no longer races with restart and marks a fresh listener as stopped
+
+### Removed
+
+- Unused "Auto-connect to last known iPhone" setting
+
 ## [1.3] - 2026-09-04
 
 ### Added

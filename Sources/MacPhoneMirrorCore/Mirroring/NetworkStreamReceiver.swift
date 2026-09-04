@@ -84,6 +84,20 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
             return
         }
 
+        // After an explicit stop, give Bonjour a moment to drop the old record
+        // so iPhone Screen Mirroring rediscovers a fresh advertisement.
+        let wasStopped: Bool = {
+            lock.lock()
+            defer { lock.unlock() }
+            if case .stopped = _state {
+                return true
+            }
+            return false
+        }()
+        if wasStopped {
+            try await Task.sleep(nanoseconds: 250_000_000)
+        }
+
         do {
             try await startListener(on: .any)
             let mirrorPort = AirPlayMirrorServer.shared.ensureRunning()
@@ -117,6 +131,17 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
 
             listener.stateUpdateHandler = { [weak self] state in
                 guard let self else { return }
+
+                // Ignore callbacks from a superseded listener after stop()/restart().
+                lock.lock()
+                let isCurrent = self.listener === listener
+                lock.unlock()
+                guard isCurrent else {
+                    if case .cancelled = state {
+                        resumeOnce.fail(CancellationError())
+                    }
+                    return
+                }
 
                 switch state {
                 case .ready:
@@ -176,19 +201,55 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
 
     private func handleConnectionEnded(_ connectionID: ObjectIdentifier) {
         lock.lock()
-        activeHandlers.removeValue(forKey: connectionID)
+        let removed = activeHandlers.removeValue(forKey: connectionID) != nil
         let hasActiveHandlers = !activeHandlers.isEmpty
         lock.unlock()
 
-        if !hasActiveHandlers {
-            sessionEndedPublisher.send(())
-        }
+        // Only the handler that was still tracked should clear session state.
+        // stop()/endCurrentSession() remove handlers first, then cancel them.
+        guard removed, !hasActiveHandlers else { return }
+
+        resetSessionState()
+        sessionEndedPublisher.send(())
     }
 
     public func endCurrentSession() {
         lock.lock()
+        let handlers = Array(activeHandlers.values)
         activeHandlers.removeAll()
         lock.unlock()
+
+        for handler in handlers {
+            handler.cancel()
+        }
+        resetSessionState()
+    }
+
+    public func stop() {
+        lock.lock()
+        let activeListener = listener
+        listener = nil
+        let handlers = Array(activeHandlers.values)
+        activeHandlers.removeAll()
+        lock.unlock()
+
+        for handler in handlers {
+            handler.cancel()
+        }
+        activeListener?.cancel()
+        resetSessionState()
+        setState(.stopped)
+        AppLogger.info("AirPlay receiver stopped", category: .airplay)
+    }
+
+    public func restart() async throws {
+        stop()
+        try await start()
+    }
+
+    private func resetSessionState() {
+        AirPlayAudioServer.shared.stop()
+        AirPlayTimingServer.shared.stop()
         AirPlayMirrorServer.shared.resetSession()
         AirPlaySessionContext.shared.deactivate()
         AirPlayMirrorServer.shared.onStreamStarted = { [weak self] in
@@ -198,24 +259,6 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
         frameCounter = 0
         latestFrame = nil
         lastReportedOrientation = .portrait
-    }
-
-    public func stop() {
-        lock.lock()
-        let activeListener = listener
-        listener = nil
-        activeHandlers.removeAll()
-        lock.unlock()
-
-        activeListener?.cancel()
-        decoder.invalidateSession()
-        setState(.stopped)
-        AppLogger.info("AirPlay receiver stopped", category: .airplay)
-    }
-
-    public func restart() async throws {
-        stop()
-        try await start()
     }
 
     public func decoder(_: VideoDecoder, didOutputPixelBuffer pixelBuffer: CVPixelBuffer, presentationTime: CMTime) {

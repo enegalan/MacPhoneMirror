@@ -53,7 +53,6 @@ public struct SettingsView: View {
 
 public struct GeneralSettingsView: View {
     @AppStorage("launchAtLogin") private var launchAtLogin = false
-    @AppStorage("autoConnect") private var autoConnect = true
     @AppStorage("autoStartMirroring") private var autoStartMirroring = true
     @State private var hovering = false
 
@@ -67,13 +66,6 @@ public struct GeneralSettingsView: View {
                 title: "Launch \(AppInfo.displayName) at Login",
                 subtitle: "Start automatically whenever you log in to this Mac.",
                 isOn: $launchAtLogin
-            )
-            ToggleRow(
-                icon: "iphone.and.arrow.forward",
-                tint: .blue,
-                title: "Auto-connect to last known iPhone",
-                subtitle: "Automatically reconnect to your most recently used device.",
-                isOn: $autoConnect
             )
             ToggleRow(
                 icon: "play.rectangle",
