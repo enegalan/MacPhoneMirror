@@ -46,6 +46,7 @@ struct MacPhoneMirrorApp: App {
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified(showsTitle: true))
         .defaultSize(width: 480, height: 860)
+        .handlesExternalEvents(matching: [])
 
         WindowGroup(id: MirrorWindowID.about) {
             AboutView(logo: aboutLogo.map { Image(nsImage: $0) })
