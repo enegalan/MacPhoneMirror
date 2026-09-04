@@ -8,6 +8,7 @@ final class AirPlayMirrorServer: @unchecked Sendable {
     var onStreamStarted: (() -> Void)?
 
     private let queue = DispatchQueue(label: "com.macphonemirror.airplay.mirror", qos: .userInteractive)
+    private let sessionQueue = DispatchQueue(label: "com.macphonemirror.airplay.mirror.session", qos: .userInteractive)
     private var listenFD: Int32 = -1
     private var acceptSource: DispatchSourceRead?
     private var isRunning = false
@@ -22,7 +23,7 @@ final class AirPlayMirrorServer: @unchecked Sendable {
     }
 
     func resetSession() {
-        queue.async { [weak self] in
+        sessionQueue.async { [weak self] in
             self?.h264Decoder.reset()
         }
     }
@@ -50,7 +51,6 @@ final class AirPlayMirrorServer: @unchecked Sendable {
 
         var reuse: Int32 = 1
         setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, socklen_t(MemoryLayout<Int32>.size))
-        setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &reuse, socklen_t(MemoryLayout<Int32>.size))
         var v6Only: Int32 = 0
         setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &v6Only, socklen_t(MemoryLayout<Int32>.size))
 
@@ -153,7 +153,10 @@ final class AirPlayMirrorServer: @unchecked Sendable {
                 continue
             }
 
-            activeSession?.stop()
+            let previous = activeSession
+            activeSession = nil
+            previous?.stop()
+
             let session = MirrorStreamSession(
                 socketFD: clientFD,
                 audioKey: audioKey,
@@ -161,14 +164,29 @@ final class AirPlayMirrorServer: @unchecked Sendable {
                 decoder: h264Decoder,
                 onStreamStarted: { [weak self] in
                     self?.onStreamStarted?()
+                },
+                onEnded: { [weak self] ended in
+                    self?.queue.async {
+                        if self?.activeSession === ended {
+                            self?.activeSession = nil
+                        }
+                    }
                 }
             )
             activeSession = session
-            session.start(on: queue)
+            session.start(on: sessionQueue)
         }
     }
 
     private func configureClientSocket(_ fd: Int32) {
+        // Darwin accept() inherits O_NONBLOCK from the listen socket. Clear it so
+        // SO_RCVTIMEO actually waits; otherwise the idle loop spins and FIN's the
+        // peer before video arrives (release builds).
+        let flags = fcntl(fd, F_GETFL, 0)
+        if flags >= 0 {
+            _ = fcntl(fd, F_SETFL, flags & ~O_NONBLOCK)
+        }
+
         var nodelay: Int32 = 1
         setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, socklen_t(MemoryLayout<Int32>.size))
         var keepalive: Int32 = 1
@@ -215,6 +233,7 @@ private final class MirrorStreamSession: @unchecked Sendable {
     private let decryptor = AirPlayMirrorDecryptor()
     private let decoder: AirPlayH264Decoder
     private let onStreamStarted: () -> Void
+    private let onEnded: (MirrorStreamSession) -> Void
 
     private var buffer = Data()
     private var mode: Mode = .handshake
@@ -231,11 +250,13 @@ private final class MirrorStreamSession: @unchecked Sendable {
         audioKey: Data,
         streamConnectionID: UInt64,
         decoder: AirPlayH264Decoder,
-        onStreamStarted: @escaping () -> Void
+        onStreamStarted: @escaping () -> Void,
+        onEnded: @escaping (MirrorStreamSession) -> Void
     ) {
         self.socketFD = socketFD
         self.decoder = decoder
         self.onStreamStarted = onStreamStarted
+        self.onEnded = onEnded
         decryptor.configure(streamConnectionID: streamConnectionID, audioAESKey: audioKey)
     }
 
@@ -254,17 +275,19 @@ private final class MirrorStreamSession: @unchecked Sendable {
         defer {
             close(socketFD)
             AppLogger.info("Mirror stream session ended (\(packetCount) packets)", category: .airplay)
+            onEnded(self)
         }
 
-        var idleTimeouts = 0
+        // Wall-clock idle limit (not recv iteration count): with O_NONBLOCK,
+        // thousands of loops finish in ms and close the peer too early.
+        let idleDeadline = Date().addingTimeInterval(30)
+        var chunk = [UInt8](repeating: 0, count: 65536)
 
         while !shouldStop {
-            var chunk = [UInt8](repeating: 0, count: 65536)
             let received = recv(socketFD, &chunk, chunk.count, 0)
 
             if received > 0 {
                 hasReceivedData = true
-                idleTimeouts = 0
                 if buffer.isEmpty, packetCount == 0 {
                     let preview = chunk.prefix(min(received, 24)).map { String(format: "%02x", $0) }.joined(separator: " ")
                     AppLogger.info("Mirror stream first bytes (\(received)B): \(preview)", category: .airplay)
@@ -281,12 +304,11 @@ private final class MirrorStreamSession: @unchecked Sendable {
 
             if errno == EAGAIN || errno == EWOULDBLOCK {
                 if !hasReceivedData {
-                    idleTimeouts += 1
                     if !didLogWaiting {
                         didLogWaiting = true
                         AppLogger.info("Mirror stream connected, waiting for video data...", category: .airplay)
                     }
-                    if idleTimeouts > 6000 {
+                    if Date() > idleDeadline {
                         AppLogger.warning("Mirror stream timeout waiting for data (30s)", category: .airplay)
                         return
                     }
