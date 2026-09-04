@@ -1,6 +1,7 @@
 import CoreBluetooth
 import Foundation
 
+// swiftlint:disable:next type_body_length
 public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchecked Sendable {
     public static let shared = BluetoothHIDTransport()
 
