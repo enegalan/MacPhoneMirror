@@ -50,10 +50,11 @@ if [[ -d "$RESOURCE_BUNDLE" ]]; then
     echo "    Copied SPM resource bundle to Contents/Resources"
 fi
 
-# Build a proper AppIcon.icns from the logo and register it in Info.plist so
-# the Finder / Dock shows the app icon. SPM does not compile .xcassets into an
-# .icns, and without CFBundleIconFile the icon is missing.
-ICON_SRC="$PROJECT_ROOT/Sources/MacPhoneMirror/Resources/logo.png"
+# Build a proper AppIcon.icns from the dock/Finder icon (with background) and
+# register it in Info.plist. Menu bar keeps using the transparent logo.png.
+# SPM does not compile .xcassets into an .icns, and without CFBundleIconFile
+# the icon is missing.
+ICON_SRC="$PROJECT_ROOT/Sources/MacPhoneMirror/Resources/app-icon.png"
 if [[ -f "$ICON_SRC" ]]; then
     ICONSET="$(mktemp -d)/AppIcon.iconset"
     mkdir -p "$ICONSET"
