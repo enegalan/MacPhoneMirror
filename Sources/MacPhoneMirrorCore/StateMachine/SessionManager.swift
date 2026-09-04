@@ -181,7 +181,7 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         lock.lock()
         if let previous = sessionReceivers[sessionID], previous !== receiver {
             let wasAirPlay = previous === NetworkStreamReceiver.shared
-            sessionTransports[sessionID]?.disconnect()
+            disconnectTransportIfOwned(sessionTransports[sessionID])
             if !wasAirPlay {
                 previous.stop()
             }
@@ -224,7 +224,7 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         let isAirPlay = receiver === NetworkStreamReceiver.shared
         lock.unlock()
 
-        transport?.disconnect()
+        disconnectTransportIfOwned(transport)
         if stopReceiver, let receiver, !isAirPlay {
             receiver.stop()
         }
@@ -268,6 +268,7 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
 
         setState(.discovering)
         PermissionManager.shared.requestLocalNetworkPermission()
+        PermissionManager.shared.requestBluetoothPermission()
 
         do {
             try await NetworkStreamReceiver.shared.start()
@@ -278,6 +279,15 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
             AppLogger.error(message, category: .session)
             setState(.failed(message))
             return
+        }
+
+        Task {
+            do {
+                try await BluetoothHIDTransport.shared.connect()
+                AppLogger.info("Bluetooth HID ready for AssistiveTouch pairing", category: .bluetooth)
+            } catch {
+                AppLogger.warning("Bluetooth HID unavailable: \(error.localizedDescription)", category: .bluetooth)
+            }
         }
 
         setupUSBAutoConnect()
@@ -310,19 +320,18 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
             isPairedForControl: false
         )
 
-        let transport = SimulatedInputTransport()
+        let hid = BluetoothHIDTransport.shared
         beginMirroringSession(
             device: device,
             receiver: NetworkStreamReceiver.shared,
-            transport: transport,
+            transport: hid.isConnected ? hid : SimulatedInputTransport(),
             replaceExistingAirPlay: true
         )
 
         Task {
-            let bluetoothTransport = BluetoothHIDTransport()
             do {
-                try await bluetoothTransport.connect()
-                replaceSimulatedTransportIfNeeded(sessionID: device.id, with: bluetoothTransport)
+                try await hid.connect()
+                replaceSimulatedTransportIfNeeded(sessionID: device.id, with: hid)
             } catch {
                 AppLogger.warning("Bluetooth input unavailable: \(error.localizedDescription)", category: .session)
             }
@@ -333,10 +342,15 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         lock.lock()
         if sessionTransports[sessionID] is SimulatedInputTransport {
             sessionTransports[sessionID] = transport
-        } else {
+        } else if transport !== BluetoothHIDTransport.shared {
             transport.disconnect()
         }
         lock.unlock()
+    }
+
+    private func disconnectTransportIfOwned(_ transport: PhoneInputTransport?) {
+        guard let transport, transport !== BluetoothHIDTransport.shared else { return }
+        transport.disconnect()
     }
 
     private func handleAirPlaySessionEnded() {
@@ -363,11 +377,10 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         AppLogger.info("USB iPhone detected: \(device.name)", category: .session)
 
         let receiver = AVFoundationUSBReceiver(deviceID: device.id)
-        let inputTransport = BluetoothHIDTransport()
+        let inputTransport = BluetoothHIDTransport.shared
 
         do {
             try await receiver.start()
-            try await inputTransport.connect()
             beginMirroringSession(
                 device: device,
                 receiver: receiver,
@@ -375,9 +388,15 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
                 replaceExistingAirPlay: false
             )
             AppLogger.info("USB mirroring started for \(device.name)", category: .session)
+            Task {
+                do {
+                    try await inputTransport.connect()
+                } catch {
+                    AppLogger.warning("Bluetooth HID unavailable for USB session: \(error.localizedDescription)", category: .bluetooth)
+                }
+            }
         } catch {
             receiver.stop()
-            inputTransport.disconnect()
             connectedUSBDeviceID = nil
 
             let message = "Could not start USB mirroring for \(device.name): \(error.localizedDescription)"
@@ -425,31 +444,6 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
 
     // MARK: - Service Management
 
-    /// Starts a synthetic 60 FPS test-pattern session that runs through the exact
-    /// same Metal render path as a real AirPlay stream. Use this to diagnose
-    /// rendering issues (e.g. black screen in the packaged .app) without an iPhone:
-    /// if the test pattern also appears black, the problem is in the render path;
-    /// if it renders, the problem is in the AirPlay H.264 decode path.
-    @discardableResult
-    public func startTestPattern() -> String? {
-        let receiver = TestPatternReceiver()
-        let device = PhoneDevice(
-            id: "test-pattern",
-            name: "Test Pattern",
-            model: .iPhone16Pro,
-            connectionType: .simulated,
-            isPairedForControl: false
-        )
-        let sessionID = beginMirroringSession(
-            device: device,
-            receiver: receiver,
-            transport: SimulatedInputTransport(),
-            replaceExistingAirPlay: false
-        )
-        Task { try? await receiver.start() }
-        return sessionID
-    }
-
     public func setServiceEnabled(_ enabled: Bool) {
         guard enabled != isServiceEnabled else { return }
         isServiceEnabled = enabled
@@ -459,6 +453,7 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
             Task { await startListening() }
         } else {
             NetworkStreamReceiver.shared.stop()
+            BluetoothHIDTransport.shared.stopAdvertising()
             disconnect()
             AppLogger.info("AirPlay service disabled by user", category: .session)
         }
@@ -519,19 +514,68 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         viewportSize: CGSize,
         sessionID: String? = nil
     ) async {
-        let resolved = sessionID.flatMap { self.session(id: $0) } ?? (sessionID == nil ? activeSession : nil)
-        guard let session = resolved else { return }
+        await handlePointerDown(at: viewportPoint, viewportSize: viewportSize, sessionID: sessionID)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        await handlePointerUp(at: viewportPoint, viewportSize: viewportSize, sessionID: sessionID)
+    }
 
-        if let normPoint = coordinateMapper.map(
+    public func handlePointerDown(
+        at viewportPoint: CGPoint,
+        viewportSize: CGSize,
+        sessionID: String? = nil
+    ) async {
+        guard let sessionID = resolvedSessionID(sessionID),
+              let normPoint = normalizedPoint(viewportPoint, viewportSize: viewportSize, sessionID: sessionID)
+        else { return }
+
+        try? await sendInputEvent(.pointerTo(normalizedX: normPoint.x, normalizedY: normPoint.y), sessionID: sessionID)
+        try? await sendInputEvent(.pointerDown(button: .left), sessionID: sessionID)
+    }
+
+    public func handlePointerMove(
+        at viewportPoint: CGPoint,
+        viewportSize: CGSize,
+        sessionID: String? = nil
+    ) async {
+        guard let sessionID = resolvedSessionID(sessionID),
+              let normPoint = normalizedPoint(viewportPoint, viewportSize: viewportSize, sessionID: sessionID)
+        else { return }
+
+        // Absolute move while button is held — AssistiveTouch treats this as a drag.
+        try? await sendInputEvent(.pointerTo(normalizedX: normPoint.x, normalizedY: normPoint.y), sessionID: sessionID)
+    }
+
+    public func handlePointerUp(
+        at viewportPoint: CGPoint,
+        viewportSize: CGSize,
+        sessionID: String? = nil
+    ) async {
+        guard let sessionID = resolvedSessionID(sessionID) else { return }
+
+        if let normPoint = normalizedPoint(viewportPoint, viewportSize: viewportSize, sessionID: sessionID) {
+            try? await sendInputEvent(.pointerTo(normalizedX: normPoint.x, normalizedY: normPoint.y), sessionID: sessionID)
+        }
+        try? await sendInputEvent(.pointerUp(button: .left), sessionID: sessionID)
+    }
+
+    private func resolvedSessionID(_ sessionID: String?) -> String? {
+        if let sessionID, session(id: sessionID) != nil {
+            return sessionID
+        }
+        return sessionID == nil ? activeSession?.id : nil
+    }
+
+    private func normalizedPoint(
+        _ viewportPoint: CGPoint,
+        viewportSize: CGSize,
+        sessionID: String
+    ) -> CGPoint? {
+        guard let session = session(id: sessionID) else { return nil }
+        return coordinateMapper.map(
             point: viewportPoint,
             in: viewportSize,
             device: session.device,
             orientation: session.orientation
-        ) {
-            try? await sendInputEvent(.pointerTo(normalizedX: normPoint.x, normalizedY: normPoint.y), sessionID: session.id)
-            try? await sendInputEvent(.pointerDown(button: .left), sessionID: session.id)
-            try? await Task.sleep(nanoseconds: 50_000_000)
-            try? await sendInputEvent(.pointerUp(button: .left), sessionID: session.id)
-        }
+        )
     }
 }

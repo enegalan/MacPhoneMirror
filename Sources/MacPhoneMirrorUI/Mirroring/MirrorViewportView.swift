@@ -8,6 +8,10 @@ public struct MirrorViewportView: View {
     public let style: FrameRenderStyle
 
     @StateObject private var metalHolder = MetalViewStateHolder()
+    @State private var isDragging = false
+    @State private var acceptingPointerGesture = true
+    @State private var pointerGestureTask: Task<Void, Never>?
+    @State private var lastMoveSentAt = Date.distantPast
 
     public init(
         sessionID: String,
@@ -23,11 +27,18 @@ public struct MirrorViewportView: View {
 
     public var body: some View {
         GeometryReader { proxy in
+            let naturalSize = naturalFrameSize
+            let scale = fittedScale(naturalSize: naturalSize, in: proxy.size)
+            let displaySize = CGSize(
+                width: naturalSize.width * scale,
+                height: naturalSize.height * scale
+            )
+
             ZStack {
                 Color(nsColor: .underPageBackgroundColor).ignoresSafeArea()
 
-                VStack(spacing: 24) {
-                    Spacer()
+                VStack(spacing: 4) {
+                    Spacer(minLength: 0)
 
                     PhoneFrameView(
                         model: device.model,
@@ -38,48 +49,73 @@ public struct MirrorViewportView: View {
                         MetalVideoView(stateHolder: metalHolder)
                             .frame(width: screenSize.width, height: screenSize.height)
                             .contentShape(Rectangle())
-                            .gesture(
-                                DragGesture(minimumDistance: 0)
-                                    .onEnded { value in
-                                        let point = value.location
-                                        Task {
-                                            await SessionManager.shared.handleMouseClick(
-                                                at: point,
-                                                viewportSize: screenSize,
-                                                sessionID: sessionID
-                                            )
-                                        }
-                                    }
-                            )
+                            .gesture(pointerDragGesture)
                     }
-                    .scaleEffect(calculatedScale(for: proxy.size))
+                    // scaleEffect does not change layout size; pin the layout box
+                    // to the visual size so the phone stays centered and never clips.
+                    .scaleEffect(scale)
+                    .frame(width: displaySize.width, height: displaySize.height)
 
-                    Spacer()
-
-                    QuickControlsBar(
-                        onHome: {
-                            Task { try? await SessionManager.shared.sendInputEvent(.homeButton, sessionID: sessionID) }
-                        },
-                        onAppSwitcher: {
-                            Task { try? await SessionManager.shared.sendInputEvent(.appSwitcher, sessionID: sessionID) }
-                        },
-                        onControlCenter: {
-                            Task { try? await SessionManager.shared.sendInputEvent(.controlCenter, sessionID: sessionID) }
-                        },
-                        onNotifications: {
-                            Task { try? await SessionManager.shared.sendInputEvent(.notificationCenter, sessionID: sessionID) }
-                        },
-                        onLock: {
-                            Task { try? await SessionManager.shared.sendInputEvent(.lockScreen, sessionID: sessionID) }
-                        },
-                        onScreenshot: { AppLogger.info("Screenshot taken", category: .ui) }
-                    )
-                    .padding(.bottom, 16)
+                    Spacer(minLength: 0)
                 }
             }
             .onAppear { bindReceiver() }
             .onChange(of: sessionID) { _, _ in bindReceiver() }
         }
+    }
+
+    private var pointerDragGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                guard acceptingPointerGesture || isDragging else { return }
+                let point = value.location
+                let start = value.startLocation
+                let viewport = screenSize
+                let id = sessionID
+                let previous = pointerGestureTask
+                pointerGestureTask = Task { @MainActor in
+                    await previous?.value
+                    if !isDragging {
+                        guard acceptingPointerGesture else { return }
+                        acceptingPointerGesture = false
+                        isDragging = true
+                        await SessionManager.shared.handlePointerDown(
+                            at: start,
+                            viewportSize: viewport,
+                            sessionID: id
+                        )
+                    }
+
+                    let now = Date()
+                    // ~60 Hz max — BLE HID cannot absorb every mouse pixel.
+                    guard now.timeIntervalSince(lastMoveSentAt) >= 0.016 else { return }
+                    lastMoveSentAt = now
+                    await SessionManager.shared.handlePointerMove(
+                        at: point,
+                        viewportSize: viewport,
+                        sessionID: id
+                    )
+                }
+            }
+            .onEnded { value in
+                let point = value.location
+                let viewport = screenSize
+                let id = sessionID
+                let previous = pointerGestureTask
+                pointerGestureTask = Task { @MainActor in
+                    await previous?.value
+                    if isDragging {
+                        await SessionManager.shared.handlePointerUp(
+                            at: point,
+                            viewportSize: viewport,
+                            sessionID: id
+                        )
+                        isDragging = false
+                    }
+                    lastMoveSentAt = .distantPast
+                    acceptingPointerGesture = true
+                }
+            }
     }
 
     private func bindReceiver() {
@@ -89,20 +125,37 @@ public struct MirrorViewportView: View {
     }
 
     private var screenSize: CGSize {
-        orientation.isLandscape
-            ? CGSize(width: device.model.pointSize.height, height: device.model.pointSize.width)
-            : device.model.pointSize
+        orientation.orientedSize(for: device.model.pointSize)
     }
 
-    private func calculatedScale(for containerSize: CGSize) -> CGFloat {
+    /// Unscaled outer size of `PhoneFrameView` for the current style/orientation.
+    private var naturalFrameSize: CGSize {
         let oriented = orientation.orientedSize(for: device.model.pointSize)
+        switch style.displayMode {
+        case .borderless:
+            return oriented
+        case .minimalBezel:
+            let inset = device.model.bezelThickness * 2
+            return CGSize(width: oriented.width + inset, height: oriented.height + inset)
+        case .realisticFrame:
+            let inset = device.model.bezelThickness * 2 + 16
+            return CGSize(width: oriented.width + inset, height: oriented.height + inset)
+        }
+    }
 
-        let availableWidth = max(containerSize.width - 60, 200)
-        let availableHeight = max(containerSize.height - 150, 300)
+    private func fittedScale(naturalSize: CGSize, in containerSize: CGSize) -> CGFloat {
+        let horizontalPadding: CGFloat = 20
+        let verticalPadding: CGFloat = 20
 
-        let scaleW = availableWidth / (oriented.width + 40)
-        let scaleH = availableHeight / (oriented.height + 40)
+        let availableWidth = max(containerSize.width - horizontalPadding, 1)
+        let availableHeight = max(containerSize.height - verticalPadding, 1)
 
-        return min(scaleW, scaleH, 1.0) * CGFloat(style.scaleFactor)
+        let fitScale = min(
+            availableWidth / max(naturalSize.width, 1),
+            availableHeight / max(naturalSize.height, 1)
+        )
+        let preferredScale = min(fitScale, 1.0) * CGFloat(style.scaleFactor)
+        // Never exceed the container — landscape must shrink into a portrait-shaped window.
+        return max(min(preferredScale, fitScale), 0.05)
     }
 }

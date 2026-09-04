@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.3] - 2026-09-04
+
+### Added
+
+- Bluetooth HID remote control: Mac advertises as a mouse/keyboard for iOS AssistiveTouch pairing
+- Absolute pointer coordinates so taps land on the mirrored screen position
+- Click-drag in the mirror viewport (pointer down/move/up) for scroll and swipe gestures
+- `NSBluetoothAlwaysUsageDescription` for Bluetooth permission prompting
+- AirPlay audio stream handling so playing media on the iPhone no longer drops the mirror session
+
+### Changed
+
+- Bluetooth HID advertising starts with the AirPlay service so AssistiveTouch can pair before mirroring
+- Mirror window scales the phone frame to fit, including landscape in a portrait-shaped window
+- Smaller minimum mirror window size
+- Bluetooth HID reports are queued instead of dropped when the radio is busy
+- Pointer gestures wait for in-flight HID reports so taps and drags complete reliably
+
+### Fixed
+
+- Audio-only TEARDOWN no longer closes the video session
+- Bluetooth HID advertising timeout no longer hangs pairing
+- Phone frame no longer clips when the window is resized
+
+### Removed
+
+- Test Pattern diagnostic from the menu bar and app UI (dev-only; not needed by end users)
+- Dynamic Island / Notch overlay from the phone frame and Appearance settings
+- Quick Controls bar from the mirror window
+
 ## [1.2.5] - 2026-09-04
 
 ### Fixed

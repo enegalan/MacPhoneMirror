@@ -21,12 +21,14 @@ public enum SystemPermission: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-public final class PermissionManager: NSObject, @unchecked Sendable {
+public final class PermissionManager: NSObject, CBCentralManagerDelegate, @unchecked Sendable {
     public static let shared = PermissionManager()
 
     private var _localNetworkAuthorized = false
+    private var _bluetoothAuthorized = false
     private let lock = NSLock()
     private var localNetworkBrowser: NWBrowser?
+    private var bluetoothProbe: CBCentralManager?
 
     override private init() {
         super.init()
@@ -35,12 +37,26 @@ public final class PermissionManager: NSObject, @unchecked Sendable {
     public func checkPermissionStatus(_ permission: SystemPermission) -> Bool {
         switch permission {
         case .bluetooth:
-            return true
+            lock.lock()
+            defer { lock.unlock() }
+            return _bluetoothAuthorized
         case .localNetwork:
             lock.lock()
             defer { lock.unlock() }
             return _localNetworkAuthorized
         }
+    }
+
+    public func requestBluetoothPermission() {
+        if bluetoothProbe == nil {
+            bluetoothProbe = CBCentralManager(delegate: self, queue: .main)
+        }
+    }
+
+    public func centralManagerDidUpdateState(_: CBCentralManager) {
+        lock.lock()
+        _bluetoothAuthorized = CBManager.authorization == .allowedAlways
+        lock.unlock()
     }
 
     public func requestLocalNetworkPermission() {
@@ -67,6 +83,7 @@ public final class PermissionManager: NSObject, @unchecked Sendable {
 
     public func startAirPlayAdvertising() async {
         requestLocalNetworkPermission()
+        requestBluetoothPermission()
         do {
             try await NetworkStreamReceiver.shared.start()
         } catch {

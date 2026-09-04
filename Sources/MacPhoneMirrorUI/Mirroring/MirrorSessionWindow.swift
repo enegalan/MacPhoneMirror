@@ -31,7 +31,7 @@ public struct MirrorSessionWindow: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .frame(minWidth: 420, minHeight: 720)
+        .frame(minWidth: 260, minHeight: 300)
         .navigationTitle(windowTitle)
         .background(SessionWindowCloseHook(sessionID: sessionID))
         .onAppear {

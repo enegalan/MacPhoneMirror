@@ -11,11 +11,13 @@
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.2.5</string>
+    <string>1.3</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>NSLocalNetworkUsageDescription</key>
     <string>MacPhoneMirror needs local network access to advertise as an AirPlay receiver so your iPhone can find it in Screen Mirroring.</string>
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>MacPhoneMirror needs Bluetooth to appear as a HID mouse and keyboard so you can control your iPhone via AssistiveTouch.</string>
     <key>NSBonjourServices</key>
     <array>
         <string>_airplay._tcp</string>

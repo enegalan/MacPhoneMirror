@@ -74,9 +74,10 @@ public struct PairingGuideView: View {
 
     private var bluetoothGuide: some View {
         VStack(alignment: .leading, spacing: 16) {
-            stepItem(number: "1", title: "Enable Bluetooth on Mac & iPhone", detail: "Make sure Bluetooth is powered on in macOS and iOS Settings.")
-            stepItem(number: "2", title: "Enable AssistiveTouch on iPhone", detail: "On iPhone, go to Settings > Accessibility > Touch > AssistiveTouch and toggle it ON.")
-            stepItem(number: "3", title: "Pair Pointer Device", detail: "In Settings > Accessibility > Touch > AssistiveTouch > Devices > Bluetooth Devices, select \(AppInfo.displayName) to pair.")
+            stepItem(number: "1", title: "Enable Bluetooth on Mac & iPhone", detail: "Make sure Bluetooth is powered on in macOS and iOS Settings. Keep \(AppInfo.displayName) running so it can advertise as a HID mouse.")
+            stepItem(number: "2", title: "Allow Bluetooth for \(AppInfo.displayName)", detail: "If macOS asks for Bluetooth access, allow it. Check System Settings > Privacy & Security > Bluetooth.")
+            stepItem(number: "3", title: "Enable AssistiveTouch on iPhone", detail: "On iPhone, go to Settings > Accessibility > Touch > AssistiveTouch and toggle it ON.")
+            stepItem(number: "4", title: "Pair Pointer Device", detail: "In AssistiveTouch > Devices > Bluetooth Devices, look for \(AppInfo.displayName) or your Mac's name (e.g. the Computer Name). Pair it, then return to the mirror window to click.")
         }
     }
 

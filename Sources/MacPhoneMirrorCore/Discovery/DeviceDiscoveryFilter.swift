@@ -8,7 +8,11 @@ enum DeviceDiscoveryFilter {
         guard device.deviceType == .external else { return false }
 
         let name = device.localizedName.lowercased()
+        // Continuity Camera shows up as external video named like Cámara de "iPhone…".
         if cameraNameTokens.contains(where: { name.contains($0) }) {
+            return false
+        }
+        if name.contains("cámara de") || name.contains("camera of") || name.contains("camera de") {
             return false
         }
 
