@@ -8,6 +8,8 @@ public struct MirrorViewportView: View {
     public let style: FrameRenderStyle
 
     @StateObject private var metalHolder = MetalViewStateHolder()
+    @State private var isDragging = false
+    @State private var lastMoveSentAt = Date.distantPast
 
     public init(
         sessionID: String,
@@ -38,19 +40,7 @@ public struct MirrorViewportView: View {
                         MetalVideoView(stateHolder: metalHolder)
                             .frame(width: screenSize.width, height: screenSize.height)
                             .contentShape(Rectangle())
-                            .gesture(
-                                DragGesture(minimumDistance: 0)
-                                    .onEnded { value in
-                                        let point = value.location
-                                        Task {
-                                            await SessionManager.shared.handleMouseClick(
-                                                at: point,
-                                                viewportSize: screenSize,
-                                                sessionID: sessionID
-                                            )
-                                        }
-                                    }
-                            )
+                            .gesture(pointerDragGesture)
                     }
                     .scaleEffect(calculatedScale(for: proxy.size))
 
@@ -80,6 +70,49 @@ public struct MirrorViewportView: View {
             .onAppear { bindReceiver() }
             .onChange(of: sessionID) { _, _ in bindReceiver() }
         }
+    }
+
+    private var pointerDragGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                let point = value.location
+                let viewport = screenSize
+                let id = sessionID
+                Task { @MainActor in
+                    if !isDragging {
+                        isDragging = true
+                        await SessionManager.shared.handlePointerDown(
+                            at: value.startLocation,
+                            viewportSize: viewport,
+                            sessionID: id
+                        )
+                    }
+
+                    let now = Date()
+                    // ~60 Hz max — BLE HID cannot absorb every mouse pixel.
+                    guard now.timeIntervalSince(lastMoveSentAt) >= 0.016 else { return }
+                    lastMoveSentAt = now
+                    await SessionManager.shared.handlePointerMove(
+                        at: point,
+                        viewportSize: viewport,
+                        sessionID: id
+                    )
+                }
+            }
+            .onEnded { value in
+                let point = value.location
+                let viewport = screenSize
+                let id = sessionID
+                Task { @MainActor in
+                    await SessionManager.shared.handlePointerUp(
+                        at: point,
+                        viewportSize: viewport,
+                        sessionID: id
+                    )
+                    isDragging = false
+                    lastMoveSentAt = .distantPast
+                }
+            }
     }
 
     private func bindReceiver() {

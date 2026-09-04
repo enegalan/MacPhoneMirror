@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.3] - 2026-09-04
+
+### Added
+
+- Bluetooth HID remote control: Mac advertises as a mouse/keyboard for iOS AssistiveTouch pairing
+- Absolute pointer coordinates so taps land on the mirrored screen position
+- Click-drag in the mirror viewport (pointer down/move/up) for scroll and swipe gestures
+- `NSBluetoothAlwaysUsageDescription` for Bluetooth permission prompting
+
+### Changed
+
+- Bluetooth HID advertising starts with the AirPlay service so AssistiveTouch can pair before mirroring
+
+### Removed
+
+- Test Pattern diagnostic from the menu bar and app UI (dev-only; not needed by end users)
+
 ## [1.2.5] - 2026-09-04
 
 ### Fixed
