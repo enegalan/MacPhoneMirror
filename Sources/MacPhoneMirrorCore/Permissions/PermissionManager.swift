@@ -53,9 +53,9 @@ public final class PermissionManager: NSObject, CBCentralManagerDelegate, @unche
         }
     }
 
-    public func centralManagerDidUpdateState(_ central: CBCentralManager) {
+    public func centralManagerDidUpdateState(_: CBCentralManager) {
         lock.lock()
-        _bluetoothAuthorized = central.state != .unauthorized && central.state != .unsupported
+        _bluetoothAuthorized = CBManager.authorization == .allowedAlways
         lock.unlock()
     }
 

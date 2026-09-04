@@ -9,6 +9,8 @@ public struct MirrorViewportView: View {
 
     @StateObject private var metalHolder = MetalViewStateHolder()
     @State private var isDragging = false
+    @State private var acceptingPointerGesture = true
+    @State private var pointerGestureTask: Task<Void, Never>?
     @State private var lastMoveSentAt = Date.distantPast
 
     public init(
@@ -75,14 +77,20 @@ public struct MirrorViewportView: View {
     private var pointerDragGesture: some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
+                guard acceptingPointerGesture || isDragging else { return }
                 let point = value.location
+                let start = value.startLocation
                 let viewport = screenSize
                 let id = sessionID
-                Task { @MainActor in
+                let previous = pointerGestureTask
+                pointerGestureTask = Task { @MainActor in
+                    await previous?.value
                     if !isDragging {
+                        guard acceptingPointerGesture else { return }
+                        acceptingPointerGesture = false
                         isDragging = true
                         await SessionManager.shared.handlePointerDown(
-                            at: value.startLocation,
+                            at: start,
                             viewportSize: viewport,
                             sessionID: id
                         )
@@ -103,14 +111,19 @@ public struct MirrorViewportView: View {
                 let point = value.location
                 let viewport = screenSize
                 let id = sessionID
-                Task { @MainActor in
-                    await SessionManager.shared.handlePointerUp(
-                        at: point,
-                        viewportSize: viewport,
-                        sessionID: id
-                    )
-                    isDragging = false
+                let previous = pointerGestureTask
+                pointerGestureTask = Task { @MainActor in
+                    await previous?.value
+                    if isDragging {
+                        await SessionManager.shared.handlePointerUp(
+                            at: point,
+                            viewportSize: viewport,
+                            sessionID: id
+                        )
+                        isDragging = false
+                    }
                     lastMoveSentAt = .distantPast
+                    acceptingPointerGesture = true
                 }
             }
     }

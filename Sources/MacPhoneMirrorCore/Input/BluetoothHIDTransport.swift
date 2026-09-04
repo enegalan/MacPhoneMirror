@@ -31,9 +31,11 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
     private var _isAdvertising = false
     private var _wantsAdvertising = false
     private var _servicesInstalled = false
+    private var _servicesInstalling = false
     private var activeButtons: UInt8 = 0
     private var readyToNotify = true
-    private var pendingNotify: (Data, CBMutableCharacteristic)?
+    private var pendingNotifyQueues: [ObjectIdentifier: [Data]] = [:]
+    private var pendingNotifyCharacteristics: [ObjectIdentifier: CBMutableCharacteristic] = [:]
     private var subscribedCentrals: [UUID: CBCentral] = [:]
     private var _subscribedCentrals: Set<UUID> = []
     private var cachedMouse = Data([0, 0, 0, 0, 0, 0])
@@ -57,11 +59,15 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
             group.addTask { try await self.connectOnce() }
             group.addTask {
                 try await Task.sleep(nanoseconds: 15_000_000_000)
-                throw NSError(
+                let timeout = NSError(
                     domain: AppInfo.name,
                     code: 408,
                     userInfo: [NSLocalizedDescriptionKey: "Bluetooth HID advertising timed out. Grant Bluetooth permission and ensure Bluetooth is On."]
                 )
+                // Resume waiters before this task throws so connectOnce cannot hang
+                // under task-group cancellation waiting on an unresumed continuation.
+                self.resumeConnectWaiters(error: timeout)
+                throw timeout
             }
             try await group.next()
             group.cancelAll()
@@ -147,8 +153,8 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
             let btn = setButton(button, pressed: false)
             transmitMouseReport(currentAbsoluteReport(buttons: btn))
 
-        case let .scroll(dx, dy):
-            applyRelativeMove(dx: dx, dy: 0, wheel: Int8(clamping: Int(dy.rounded())))
+        case let .scroll(_, dy):
+            applyRelativeMove(dx: 0, dy: 0, wheel: Int8(clamping: Int(dy.rounded())))
 
         case let .keyDown(keyCode, modifiers):
             transmitKeyboardReport(HIDKeyboardReport(modifiers: modifiers, keyCodes: [keyCode]))
@@ -332,14 +338,61 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
             guard !centrals.isEmpty else { return }
 
             if !readyToNotify {
-                pendingNotify = (data, characteristic)
+                enqueuePendingNotify(data, characteristic: characteristic)
                 return
             }
             let ok = peripheralManager.updateValue(data, for: characteristic, onSubscribedCentrals: centrals)
             if !ok {
                 readyToNotify = false
-                pendingNotify = (data, characteristic)
+                enqueuePendingNotify(data, characteristic: characteristic)
             }
+        }
+    }
+
+    private func enqueuePendingNotify(_ data: Data, characteristic: CBMutableCharacteristic) {
+        let id = ObjectIdentifier(characteristic)
+        pendingNotifyCharacteristics[id] = characteristic
+        var queue = pendingNotifyQueues[id] ?? []
+        queue.append(data)
+        pendingNotifyQueues[id] = queue
+    }
+
+    private func drainPendingNotifications(using peripheralManager: CBPeripheralManager) {
+        let centrals = lock.withLock { Array(subscribedCentrals.values) }
+        guard !centrals.isEmpty else {
+            pendingNotifyQueues.removeAll()
+            pendingNotifyCharacteristics.removeAll()
+            return
+        }
+
+        while readyToNotify, !pendingNotifyQueues.isEmpty {
+            var sentAny = false
+            for id in Array(pendingNotifyQueues.keys) {
+                guard var queue = pendingNotifyQueues[id], !queue.isEmpty,
+                      let characteristic = pendingNotifyCharacteristics[id]
+                else {
+                    pendingNotifyQueues.removeValue(forKey: id)
+                    pendingNotifyCharacteristics.removeValue(forKey: id)
+                    continue
+                }
+                let data = queue.removeFirst()
+                let ok = peripheralManager.updateValue(data, for: characteristic, onSubscribedCentrals: centrals)
+                if ok {
+                    sentAny = true
+                    if queue.isEmpty {
+                        pendingNotifyQueues.removeValue(forKey: id)
+                        pendingNotifyCharacteristics.removeValue(forKey: id)
+                    } else {
+                        pendingNotifyQueues[id] = queue
+                    }
+                } else {
+                    queue.insert(data, at: 0)
+                    pendingNotifyQueues[id] = queue
+                    readyToNotify = false
+                    return
+                }
+            }
+            if !sentAny { break }
         }
     }
 
@@ -384,10 +437,11 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
     private func installServices() {
         guard let peripheralManager else { return }
         lock.lock()
-        guard !_servicesInstalled else {
+        guard !_servicesInstalled, !_servicesInstalling else {
             lock.unlock()
             return
         }
+        _servicesInstalling = true
         lock.unlock()
 
         let battery = buildBatteryService()
@@ -577,6 +631,9 @@ extension BluetoothHIDTransport: CBPeripheralManagerDelegate {
 
     public func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?) {
         if let error {
+            lock.lock()
+            _servicesInstalling = false
+            lock.unlock()
             AppLogger.error("Failed to add HID service \(service.uuid): \(error.localizedDescription)", category: .bluetooth)
             resumeConnectWaiters(error: error)
             return
@@ -590,6 +647,7 @@ extension BluetoothHIDTransport: CBPeripheralManagerDelegate {
         case BluetoothHIDProfile.hidService:
             lock.lock()
             _servicesInstalled = true
+            _servicesInstalling = false
             lock.unlock()
             startAdvertisingNow()
         default:
@@ -608,8 +666,24 @@ extension BluetoothHIDTransport: CBPeripheralManagerDelegate {
         }
 
         lock.lock()
-        _isAdvertising = true
+        let wantsAdvertising = _wantsAdvertising
+        if wantsAdvertising {
+            _isAdvertising = true
+        } else {
+            _isAdvertising = false
+        }
         lock.unlock()
+
+        guard wantsAdvertising else {
+            peripheralManager?.stopAdvertising()
+            resumeConnectWaiters(error: NSError(
+                domain: AppInfo.name,
+                code: 409,
+                userInfo: [NSLocalizedDescriptionKey: "Bluetooth HID advertising was cancelled before it started."]
+            ))
+            return
+        }
+
         AppLogger.info("Bluetooth HID advertising as '\(AppInfo.displayName)'", category: .bluetooth)
         resumeConnectWaiters(error: nil)
     }
@@ -656,12 +730,9 @@ extension BluetoothHIDTransport: CBPeripheralManagerDelegate {
         AppLogger.info("iPhone unsubscribed from \(characteristic.uuid)", category: .bluetooth)
     }
 
-    public func peripheralManagerIsReady(toUpdateSubscribers _: CBPeripheralManager) {
+    public func peripheralManagerIsReady(toUpdateSubscribers peripheral: CBPeripheralManager) {
         readyToNotify = true
-        if let (data, char) = pendingNotify {
-            pendingNotify = nil
-            notify(data, characteristic: char)
-        }
+        drainPendingNotifications(using: peripheral)
     }
 
     public func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveRead request: CBATTRequest) {
