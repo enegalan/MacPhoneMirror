@@ -32,7 +32,6 @@ public struct FrameRenderStyle: Codable, Sendable, Equatable {
     public var finish: FrameFinish
     public var showShadow: Bool
     public var showReflection: Bool
-    public var showDynamicIsland: Bool
     public var showHardwareButtons: Bool
     public var scaleFactor: Double
 
@@ -41,7 +40,6 @@ public struct FrameRenderStyle: Codable, Sendable, Equatable {
         finish: FrameFinish = .naturalTitanium,
         showShadow: Bool = true,
         showReflection: Bool = true,
-        showDynamicIsland: Bool = true,
         showHardwareButtons: Bool = true,
         scaleFactor: Double = 1.0
     ) {
@@ -49,7 +47,6 @@ public struct FrameRenderStyle: Codable, Sendable, Equatable {
         self.finish = finish
         self.showShadow = showShadow
         self.showReflection = showReflection
-        self.showDynamicIsland = showDynamicIsland
         self.showHardwareButtons = showHardwareButtons
         self.scaleFactor = scaleFactor
     }

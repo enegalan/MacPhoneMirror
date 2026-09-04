@@ -238,13 +238,6 @@ public struct AppearanceSettingsView: View {
                 FinishPickerView(frameStyle: $frameStyle)
 
                 ToggleRow(
-                    icon: "rectangle.inset.filled",
-                    tint: .cyan,
-                    title: "Dynamic Island / Notch Overlay",
-                    subtitle: "Show the pill-shaped dynamic island on the display.",
-                    isOn: $frameStyle.showDynamicIsland
-                )
-                ToggleRow(
                     icon: "button.programmable",
                     tint: .green,
                     title: "Hardware Buttons",

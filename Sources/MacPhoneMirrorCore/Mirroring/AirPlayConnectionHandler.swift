@@ -191,8 +191,7 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
         case "POST" where request.path == "/feedback" || request.path == "/command":
             respondOK(cSeq: request.cSeq, body: Data())
         case "TEARDOWN":
-            respondOK(cSeq: request.cSeq, body: Data())
-            finish()
+            handleTeardown(request: request)
         default:
             AppLogger.warning("Unhandled AirPlay request: \(request.method) \(request.path)", category: .airplay)
             respondOK(cSeq: request.cSeq, body: Data())
@@ -443,6 +442,8 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
             throw SetupError.invalidPlist
         }
 
+        AppLogger.info("SETUP request keys: \(root.keys.sorted())", category: .airplay)
+
         var response: [String: Any] = [:]
 
         if let eKey = root["ekey"] as? Data,
@@ -461,7 +462,6 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
             response["eventPort"] = Int(controlPort)
             response["timingPort"] = Int(timingPort)
             AppLogger.info("SETUP keys decrypted (eventPort=\(controlPort), timingPort=\(timingPort))", category: .airplay)
-            AppLogger.info("SETUP request keys: \(root.keys.sorted())", category: .airplay)
 
             if let clientTimingPort = plistUInt64(root["timingPort"]).map({ UInt16($0) }), clientTimingPort > 0 {
                 AppLogger.info("SETUP client timingPort=\(clientTimingPort)", category: .airplay)
@@ -474,17 +474,23 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
             _ = AirPlayMirrorServer.shared.ensureRunning()
         }
 
-        if let streams = root["streams"] as? [[String: Any]] {
+        let streamDicts = setupStreamDictionaries(from: root)
+        if !streamDicts.isEmpty {
             var responseStreams: [[String: Any]] = []
+            let requestedTypes = streamDicts.compactMap { plistUInt64($0["type"]) }
+            AppLogger.info("SETUP streams types=\(requestedTypes)", category: .airplay)
 
-            for stream in streams {
+            for stream in streamDicts {
                 guard let type = plistUInt64(stream["type"]) else { continue }
 
                 if type == 110 {
+                    let mirrorKey = aesKey.isEmpty
+                        ? (AirPlaySessionContext.shared.currentMirrorAESKey() ?? Data())
+                        : aesKey
                     if let streamID = plistUInt64(stream["streamConnectionID"]) {
                         streamConnectionID = streamID
                         AirPlaySessionContext.shared.configureMirrorStream(
-                            aesKey: aesKey,
+                            aesKey: mirrorKey,
                             streamConnectionID: streamID
                         )
                     }
@@ -503,12 +509,54 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
                         "Mirroring stream configured on port \(mirrorPort), streamConnectionID=\(streamConnectionID)",
                         category: .airplay
                     )
+                } else if type == 96 || type == 103 {
+                    // Realtime (96) or buffered (103) audio. Accept SETUP so media
+                    // playback does not abort the mirror session.
+                    guard let ports = AirPlayAudioServer.shared.ensureRunning() else {
+                        throw SetupError.audioServerUnavailable
+                    }
+
+                    sessionIsActive = true
+                    responseStreams.append([
+                        "dataPort": Int(ports.dataPort),
+                        "controlPort": Int(ports.controlPort),
+                        "type": Int(type),
+                    ])
+                    AppLogger.info(
+                        "Audio stream type=\(type) dataPort=\(ports.dataPort) controlPort=\(ports.controlPort)",
+                        category: .airplay
+                    )
+                } else {
+                    // Unknown stream (often media/audio variants). Still accept with an
+                    // RTP sink so the phone does not tear down the mirror session.
+                    AppLogger.warning("SETUP accepting unknown stream type=\(type) as audio sink", category: .airplay)
+                    guard let ports = AirPlayAudioServer.shared.ensureRunning() else {
+                        throw SetupError.audioServerUnavailable
+                    }
+                    sessionIsActive = true
+                    responseStreams.append([
+                        "dataPort": Int(ports.dataPort),
+                        "controlPort": Int(ports.controlPort),
+                        "type": Int(type),
+                    ])
                 }
             }
 
             if !responseStreams.isEmpty {
                 response["streams"] = responseStreams
             }
+        } else if root["streams"] != nil {
+            AppLogger.warning(
+                "SETUP streams present but unreadable (type=\(String(describing: type(of: root["streams"]!))))",
+                category: .airplay
+            )
+        }
+
+        // Session refresh / no-op SETUP during an active mirror: keep the client alive.
+        if response.isEmpty, sessionIsActive || AirPlaySessionContext.shared.isSessionActive() {
+            response["eventPort"] = Int(AirPlaySessionContext.shared.currentControlPort())
+            response["timingPort"] = Int(timingPort)
+            AppLogger.info("SETUP session refresh (eventPort/timingPort only)", category: .airplay)
         }
 
         guard !response.isEmpty else {
@@ -518,11 +566,68 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
         return try PropertyListSerialization.data(fromPropertyList: response, format: .binary, options: 0)
     }
 
+    /// Plist `streams` often fails `as? [[String: Any]]` when nested values vary.
+    private func setupStreamDictionaries(from root: [String: Any]) -> [[String: Any]] {
+        if let streams = root["streams"] as? [[String: Any]] {
+            return streams
+        }
+        guard let items = root["streams"] as? [Any] else { return [] }
+        return items.compactMap { item in
+            if let stream = item as? [String: Any] {
+                return stream
+            }
+            if let stream = item as? [AnyHashable: Any] {
+                var converted: [String: Any] = [:]
+                for (key, value) in stream {
+                    guard let stringKey = key as? String else { continue }
+                    converted[stringKey] = value
+                }
+                return converted.isEmpty ? nil : converted
+            }
+            return nil
+        }
+    }
+
+    private func handleTeardown(request: AirPlayHTTPRequest) {
+        var teardownAudio = false
+        var teardownVideo = false
+
+        if !request.body.isEmpty,
+           let root = try? PropertyListSerialization.propertyList(from: request.body, format: nil) as? [String: Any]
+        {
+            let streams = setupStreamDictionaries(from: root)
+            for stream in streams {
+                guard let type = plistUInt64(stream["type"]) else { continue }
+                if type == 110 {
+                    teardownVideo = true
+                } else {
+                    // 96/103 and other media streams: drop audio sink only.
+                    teardownAudio = true
+                }
+            }
+        }
+
+        AppLogger.info(
+            "TEARDOWN audio=\(teardownAudio) video=\(teardownVideo) body=\(request.body.count)B",
+            category: .airplay
+        )
+        respondOK(cSeq: request.cSeq, body: Data())
+
+        if teardownAudio, !teardownVideo {
+            AirPlayAudioServer.shared.stop()
+            return
+        }
+
+        AirPlayAudioServer.shared.stop()
+        finish()
+    }
+
     private enum SetupError: LocalizedError {
         case invalidPlist
         case keyDecryptionFailed
         case emptyResponse
         case mirrorServerUnavailable
+        case audioServerUnavailable
 
         var errorDescription: String? {
             switch self {
@@ -530,6 +635,7 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
             case .keyDecryptionFailed: "FairPlay key decryption failed"
             case .emptyResponse: "No SETUP response fields"
             case .mirrorServerUnavailable: "Mirror video server could not start"
+            case .audioServerUnavailable: "Audio RTP sink could not start"
             }
         }
     }

@@ -52,21 +52,9 @@ public struct PhoneFrameView<ScreenContent: View>: View {
     }
 
     private var screenContainer: some View {
-        ZStack {
-            screenContent
-                .frame(width: orientedScreenSize.width, height: orientedScreenSize.height)
-
-            if style.showDynamicIsland, orientation.isPortrait {
-                VStack {
-                    DynamicIslandView(model: model)
-                        .padding(.top, 11)
-                    Spacer(minLength: 0)
-                }
-                .frame(width: orientedScreenSize.width, height: orientedScreenSize.height)
-            }
-        }
-        .frame(width: orientedScreenSize.width, height: orientedScreenSize.height)
-        .clipShape(RoundedRectangle(cornerRadius: model.screenCornerRadius, style: .continuous))
+        screenContent
+            .frame(width: orientedScreenSize.width, height: orientedScreenSize.height)
+            .clipShape(RoundedRectangle(cornerRadius: model.screenCornerRadius, style: .continuous))
     }
 
     private var minimalBezelContainer: some View {

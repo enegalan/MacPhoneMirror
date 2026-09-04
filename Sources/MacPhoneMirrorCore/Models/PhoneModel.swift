@@ -1,12 +1,6 @@
 import CoreGraphics
 import Foundation
 
-public enum PhoneCutoutStyle: String, Codable, Sendable {
-    case dynamicIsland
-    case notch
-    case none // SE / Home button devices
-}
-
 public enum PhoneModel: String, CaseIterable, Identifiable, Codable, Sendable {
     case iPhone16ProMax = "iPhone 16 Pro Max"
     case iPhone16Pro = "iPhone 16 Pro"
@@ -67,19 +61,6 @@ public enum PhoneModel: String, CaseIterable, Identifiable, Codable, Sendable {
         pointSize.height / pointSize.width
     }
 
-    public var cutoutStyle: PhoneCutoutStyle {
-        switch self {
-        case .iPhone16ProMax, .iPhone16Pro, .iPhone16Plus, .iPhone16,
-             .iPhone15ProMax, .iPhone15Pro, .iPhone15Plus, .iPhone15,
-             .iPhone14ProMax, .iPhone14Pro, .genericModern:
-            .dynamicIsland
-        case .iPhone14, .iPhone13Pro, .iPhone13:
-            .notch
-        case .iPhoneSE3:
-            .none
-        }
-    }
-
     /// Corner radius for the screen in points
     public var screenCornerRadius: CGFloat {
         switch self {
@@ -115,30 +96,25 @@ public enum PhoneModel: String, CaseIterable, Identifiable, Codable, Sendable {
         }
     }
 
-    /// Dynamic Island normal size in points
-    public var dynamicIslandSize: CGSize {
-        CGSize(width: 125, height: 36)
-    }
-
     /// Top safe area inset in points
     public var topSafeAreaInset: CGFloat {
-        switch cutoutStyle {
-        case .dynamicIsland:
-            59.0
-        case .notch:
-            47.0
-        case .none:
+        switch self {
+        case .iPhoneSE3:
             20.0
+        case .iPhone14, .iPhone13Pro, .iPhone13:
+            47.0
+        default:
+            59.0
         }
     }
 
     /// Bottom safe area inset in points
     public var bottomSafeAreaInset: CGFloat {
-        switch cutoutStyle {
-        case .dynamicIsland, .notch:
-            34.0
-        case .none:
+        switch self {
+        case .iPhoneSE3:
             0.0
+        default:
+            34.0
         }
     }
 }
