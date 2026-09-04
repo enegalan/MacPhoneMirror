@@ -84,13 +84,21 @@ private struct SessionWindowCloseHook: NSViewRepresentable {
 
     final class Coordinator {
         private var observer: NSObjectProtocol?
+        private weak var observedWindow: NSWindow?
         private var sessionID: String = ""
 
         func attach(to window: NSWindow, sessionID: String) {
             self.sessionID = sessionID
-            if observer != nil {
+            if observer != nil, observedWindow === window {
                 return
             }
+
+            if let observer {
+                NotificationCenter.default.removeObserver(observer)
+                self.observer = nil
+            }
+
+            observedWindow = window
             observer = NotificationCenter.default.addObserver(
                 forName: NSWindow.willCloseNotification,
                 object: window,

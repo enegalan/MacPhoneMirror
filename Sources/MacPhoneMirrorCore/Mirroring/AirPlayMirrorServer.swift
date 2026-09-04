@@ -153,10 +153,6 @@ final class AirPlayMirrorServer: @unchecked Sendable {
                 continue
             }
 
-            let previous = activeSession
-            activeSession = nil
-            previous?.stop()
-
             let session = MirrorStreamSession(
                 socketFD: clientFD,
                 audioKey: audioKey,
@@ -173,7 +169,10 @@ final class AirPlayMirrorServer: @unchecked Sendable {
                     }
                 }
             )
+
+            let previous = activeSession
             activeSession = session
+            previous?.stop()
             session.start(on: sessionQueue)
         }
     }
