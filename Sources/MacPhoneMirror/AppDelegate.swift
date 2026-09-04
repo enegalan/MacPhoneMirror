@@ -19,7 +19,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func applyAppIcon() {
-        if let image = AppResources.image(forResource: "logo", withExtension: "png") {
+        if let image = AppResources.image(forResource: "app-icon", withExtension: "png") {
             NSApp.applicationIconImage = image
         }
     }
