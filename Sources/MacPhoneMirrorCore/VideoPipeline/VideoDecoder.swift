@@ -15,6 +15,7 @@ public final class VideoDecoder: @unchecked Sendable {
     private var didLogFirstPixelBuffer = false
     private var decodeErrorCount = 0
     private var inFlightFrames = 0
+    private var pendingTickets: [ObjectIdentifier: InFlightTicket] = [:]
     private let inFlightLock = NSLock()
     private let maxInFlightLowLatency = 5
 
@@ -32,6 +33,7 @@ public final class VideoDecoder: @unchecked Sendable {
         decodeErrorCount = 0
         inFlightLock.lock()
         inFlightFrames = 0
+        pendingTickets.removeAll()
         inFlightLock.unlock()
         invalidateSession()
 
@@ -44,10 +46,17 @@ public final class VideoDecoder: @unchecked Sendable {
 
         var outputCallback = VTDecompressionOutputCallbackRecord(
             // swiftlint:disable:next line_length
-            decompressionOutputCallback: { decompressionOutputRefCon, _, status, _, imageBuffer, presentationTimeStamp, _ in
+            decompressionOutputCallback: { decompressionOutputRefCon, sourceFrameRefCon, status, _, imageBuffer, presentationTimeStamp, _ in
                 guard let refCon = decompressionOutputRefCon else { return }
                 let decoder = Unmanaged<VideoDecoder>.fromOpaque(refCon).takeUnretainedValue()
-                decoder.noteFrameCompleted()
+
+                if let sourceFrameRefCon {
+                    let ticket = Unmanaged<InFlightTicket>.fromOpaque(sourceFrameRefCon).takeUnretainedValue()
+                    decoder.finishTicket(ticket)
+                } else {
+                    decoder.noteFrameCompleted()
+                }
+
                 guard status == noErr, let imageBuffer else {
                     if status != noErr {
                         decoder.noteDecodeError(status)
@@ -110,18 +119,24 @@ public final class VideoDecoder: @unchecked Sendable {
             decodeFlags.insert(._1xRealTimePlayback)
         }
 
-        noteFrameStarted()
+        let ticket = InFlightTicket()
+        inFlightLock.lock()
+        pendingTickets[ObjectIdentifier(ticket)] = ticket
+        inFlightFrames += 1
+        inFlightLock.unlock()
+
         let start = CFAbsoluteTimeGetCurrent()
         let status = VTDecompressionSessionDecodeFrame(
             session,
             sampleBuffer: sampleBuffer,
             flags: decodeFlags,
-            frameRefcon: nil,
+            frameRefcon: Unmanaged.passUnretained(ticket).toOpaque(),
             infoFlagsOut: &flagsOut
         )
 
         if status != noErr {
-            noteFrameCompleted()
+            // Sync reject. Callback may also run; finishTicket is one-shot.
+            finishTicket(ticket)
             AppLogger.warning("VTDecompressionSessionDecodeFrame status: \(status)", category: .airplay)
             PerformanceMonitor.shared.recordDroppedFrame()
         } else {
@@ -147,9 +162,12 @@ public final class VideoDecoder: @unchecked Sendable {
         }
     }
 
-    private func noteFrameStarted() {
+    /// Completes in-flight accounting at most once per DecodeFrame submission.
+    fileprivate func finishTicket(_ ticket: InFlightTicket) {
+        guard ticket.markCompleted() else { return }
         inFlightLock.lock()
-        inFlightFrames += 1
+        pendingTickets.removeValue(forKey: ObjectIdentifier(ticket))
+        inFlightFrames = max(0, inFlightFrames - 1)
         inFlightLock.unlock()
     }
 
@@ -170,5 +188,19 @@ public final class VideoDecoder: @unchecked Sendable {
             VTDecompressionSessionInvalidate(session)
             decompressionSession = nil
         }
+    }
+}
+
+/// One-shot gate so sync DecodeFrame failure and the output callback cannot both decrement.
+private final class InFlightTicket: @unchecked Sendable {
+    private let lock = NSLock()
+    private var didComplete = false
+
+    func markCompleted() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !didComplete else { return false }
+        didComplete = true
+        return true
     }
 }

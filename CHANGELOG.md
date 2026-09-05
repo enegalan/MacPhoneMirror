@@ -15,6 +15,7 @@
 
 - Rapid AirPlay service toggle no longer races start/stop (stale starts cannot clear a newer listener or leave Bonjour half-registered)
 - Mirror TCP accept socket shuts down with the AirPlay service so reconnects get a clean dataPort
+- Failed VideoToolbox decodes no longer double-decrement the in-flight frame counter (low-latency drop accounting)
 
 ### Changed
 
