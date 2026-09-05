@@ -59,18 +59,18 @@ public enum ConnectionState: Sendable, Equatable {
             true
         case (.discovering, .discovering):
             true
-        case let (.connecting(a), .connecting(b)):
-            a.id == b.id
-        case let (.connected(a), .connected(b)):
-            a.id == b.id
-        case let (.mirroring(a), .mirroring(b)):
-            a.id == b.id
-        case let (.controlling(a), .controlling(b)):
-            a.id == b.id
-        case let (.reconnecting(a, attA), .reconnecting(b, attB)):
-            a.id == b.id && attA == attB
-        case let (.failed(a), .failed(b)):
-            a == b
+        case let (.connecting(lhsDevice), .connecting(rhsDevice)):
+            lhsDevice.id == rhsDevice.id
+        case let (.connected(lhsDevice), .connected(rhsDevice)):
+            lhsDevice.id == rhsDevice.id
+        case let (.mirroring(lhsDevice), .mirroring(rhsDevice)):
+            lhsDevice.id == rhsDevice.id
+        case let (.controlling(lhsDevice), .controlling(rhsDevice)):
+            lhsDevice.id == rhsDevice.id
+        case let (.reconnecting(lhsDevice, lhsAttempt), .reconnecting(rhsDevice, rhsAttempt)):
+            lhsDevice.id == rhsDevice.id && lhsAttempt == rhsAttempt
+        case let (.failed(lhsMessage), .failed(rhsMessage)):
+            lhsMessage == rhsMessage
         default:
             false
         }

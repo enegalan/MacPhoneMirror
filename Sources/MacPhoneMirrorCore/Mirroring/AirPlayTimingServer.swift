@@ -43,6 +43,7 @@ final class AirPlayTimingServer: @unchecked Sendable {
         didLogSendSuccess = false
     }
 
+    // swiftlint:disable:next function_body_length
     private func startLocked(connection: NWConnection, clientTimingPort: UInt16, localPort: UInt16) {
         stopLocked()
 
@@ -66,9 +67,21 @@ final class AirPlayTimingServer: @unchecked Sendable {
             var ifIndex = if_nametoindex(interfaceNameCString)
             if ifIndex != 0 {
                 if isIPv6 {
-                    setsockopt(socketFD, IPPROTO_IPV6, IPV6_BOUND_IF, &ifIndex, socklen_t(MemoryLayout.size(ofValue: ifIndex)))
+                    setsockopt(
+                        socketFD,
+                        IPPROTO_IPV6,
+                        IPV6_BOUND_IF,
+                        &ifIndex,
+                        socklen_t(MemoryLayout.size(ofValue: ifIndex))
+                    )
                 } else {
-                    setsockopt(socketFD, IPPROTO_IP, IP_BOUND_IF, &ifIndex, socklen_t(MemoryLayout.size(ofValue: ifIndex)))
+                    setsockopt(
+                        socketFD,
+                        IPPROTO_IP,
+                        IP_BOUND_IF,
+                        &ifIndex,
+                        socklen_t(MemoryLayout.size(ofValue: ifIndex))
+                    )
                 }
             }
         }

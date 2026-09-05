@@ -3,39 +3,17 @@ import SwiftUI
 
 public struct PairingGuideView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedTab = 0
+    @State private var selectedTab: Int
 
-    public init() {}
+    public init(initialTab: Int = 0) {
+        _selectedTab = State(initialValue: initialTab)
+    }
 
     public var body: some View {
         VStack(spacing: 0) {
-            // Header
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Connection & Pairing Guide")
-                        .font(.headline)
-                    Text("Follow these steps to connect your iPhone to \(AppInfo.displayName).")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                Spacer()
-                Button("Done") {
-                    dismiss()
-                }
-                .buttonStyle(.borderedProminent)
-            }
-            .padding(20)
-
+            pairingHeader
             Divider()
-
-            Picker("", selection: $selectedTab) {
-                Text("USB Connection (Recommended)").tag(0)
-                Text("Wi-Fi / AirPlay").tag(1)
-                Text("Bluetooth Control Setup").tag(2)
-            }
-            .pickerStyle(.segmented)
-            .padding(16)
-
+            tabPicker
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     if selectedTab == 0 {
@@ -52,32 +30,110 @@ public struct PairingGuideView: View {
         .frame(width: 580, height: 480)
     }
 
+    private var pairingHeader: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("How to Connect")
+                    .font(.headline)
+                Text("Pick a method below and follow the steps.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            Button("Done") {
+                dismiss()
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding(20)
+    }
+
+    private var tabPicker: some View {
+        Picker("", selection: $selectedTab) {
+            Text("USB Cable").tag(0)
+            Text("Wi-Fi").tag(1)
+            Text("Mouse & Keyboard").tag(2)
+        }
+        .pickerStyle(.segmented)
+        .padding(16)
+    }
+
     private var usbGuide: some View {
         VStack(alignment: .leading, spacing: 16) {
-            stepItem(number: "1", title: "Connect via USB-C or Lightning Cable", detail: "Plug your iPhone directly into your Mac using an Apple certified data cable.")
-            stepItem(number: "2", title: "Trust This Computer", detail: "Unlock your iPhone. If prompted, tap 'Trust This Computer' and enter your passcode.")
-            stepItem(number: "3", title: "Hardware-Accelerated Zero Lag Mirroring", detail: "\(AppInfo.displayName) uses native AVFoundation USB capture to deliver 60 FPS video at sub-10ms latency.")
+            stepItem(
+                number: "1",
+                title: "Plug in your iPhone",
+                detail: "Use a USB-C or Lightning cable to connect your iPhone to this Mac."
+            )
+            stepItem(
+                number: "2",
+                title: "Trust this Mac",
+                detail: "Unlock your iPhone. If you see Trust This Computer, tap Trust and enter your passcode."
+            )
+            stepItem(
+                number: "3",
+                title: "Wait for the window",
+                detail: "Your iPhone screen should appear in a window on this Mac. USB is the fastest option."
+            )
         }
     }
 
     private var wifiGuide: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // swiftlint:disable:next line_length
-            stepItem(number: "1", title: "Allow Local Network Access", detail: "When macOS prompts, allow \(AppInfo.displayName) to use the local network. Without this, your iPhone cannot discover the AirPlay receiver.")
-            stepItem(number: "2", title: "Same Wi-Fi Network", detail: "Ensure both your Mac and iPhone are connected to the same Wi-Fi network.")
-            stepItem(number: "3", title: "Open Control Center on iPhone", detail: "Swipe down from the top right corner of your iPhone screen to open Control Center.")
-            stepItem(number: "4", title: "Tap Screen Mirroring", detail: "Select '\(AppInfo.displayName)' from the list of available AirPlay receivers.")
-            // swiftlint:disable:next line_length
-            stepItem(number: "5", title: "AirPlay Receiver Conflict", detail: "If \(AppInfo.displayName) does not appear, disable macOS AirPlay Receiver in System Settings > General > AirDrop & Handoff > AirPlay Receiver.")
+        let name = AirPlayTXTRecordBuilder.serviceName
+        return VStack(alignment: .leading, spacing: 16) {
+            stepItem(
+                number: "1",
+                title: "Allow the network prompt",
+                detail: "If this Mac asks to use the local network, click Allow so your iPhone can find it."
+            )
+            stepItem(
+                number: "2",
+                title: "Use the same Wi-Fi",
+                detail: "Connect your iPhone and this Mac to the same Wi-Fi network."
+            )
+            stepItem(
+                number: "3",
+                title: "Open Control Center",
+                detail: "On iPhone, swipe down from the top-right corner of the screen."
+            )
+            stepItem(
+                number: "4",
+                title: "Tap Screen Mirroring",
+                detail: "Then tap \"\(name)\" in the list. Your screen opens in a window on this Mac."
+            )
+            stepItem(
+                number: "5",
+                title: "If you don't see it",
+                detail: "On this Mac, open System Settings → General → AirDrop & Handoff, "
+                    + "turn off AirPlay Receiver, and try Screen Mirroring again."
+            )
         }
     }
 
     private var bluetoothGuide: some View {
         VStack(alignment: .leading, spacing: 16) {
-            stepItem(number: "1", title: "Enable Bluetooth on Mac & iPhone", detail: "Make sure Bluetooth is powered on in macOS and iOS Settings. Keep \(AppInfo.displayName) running so it can advertise as a HID mouse.")
-            stepItem(number: "2", title: "Allow Bluetooth for \(AppInfo.displayName)", detail: "If macOS asks for Bluetooth access, allow it. Check System Settings > Privacy & Security > Bluetooth.")
-            stepItem(number: "3", title: "Enable AssistiveTouch on iPhone", detail: "On iPhone, go to Settings > Accessibility > Touch > AssistiveTouch and toggle it ON.")
-            stepItem(number: "4", title: "Pair Pointer Device", detail: "In AssistiveTouch > Devices > Bluetooth Devices, look for \(AppInfo.displayName) or your Mac's name (e.g. the Computer Name). Pair it, then return to the mirror window to click.")
+            stepItem(
+                number: "1",
+                title: "Turn on Bluetooth",
+                detail: "Turn on Bluetooth on your iPhone and this Mac. Keep \(AppInfo.displayName) open."
+            )
+            stepItem(
+                number: "2",
+                title: "Allow Bluetooth",
+                detail: "If this Mac asks to use Bluetooth, click Allow. "
+                    + "You can also check System Settings → Privacy & Security → Bluetooth."
+            )
+            stepItem(
+                number: "3",
+                title: "Turn on AssistiveTouch",
+                detail: "On iPhone, go to Settings → Accessibility → Touch → AssistiveTouch, and turn it on."
+            )
+            stepItem(
+                number: "4",
+                title: "Pair this Mac",
+                detail: "In AssistiveTouch, tap Devices → Bluetooth Devices. "
+                    + "Tap \(AppInfo.displayName) or your Mac's name. After it pairs, you can click in the mirror window."
+            )
         }
     }
 

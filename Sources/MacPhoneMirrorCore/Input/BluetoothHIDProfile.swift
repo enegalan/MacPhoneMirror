@@ -139,6 +139,7 @@ enum BluetoothHIDProfile {
 enum ConsumerUsage: UInt16 {
     case power = 0x0030
     case menu = 0x0040
+    case voiceCommand = 0x00CF
     case volumeIncrement = 0x00E9
     case volumeDecrement = 0x00EA
     case acHome = 0x0223

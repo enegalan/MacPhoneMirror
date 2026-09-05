@@ -91,7 +91,7 @@ public final class PerformanceMonitor: @unchecked Sendable {
             totalFrames: totalFrames,
             bitRateMbps: currentBitRate > 0 ? currentBitRate : 28.5,
             resolution: lastResolution,
-            isHardwareAccelerated: true
+            isHardwareAccelerated: AppPreferences.enableHardwareDecode
         )
     }
 

@@ -37,7 +37,7 @@ public enum StreamQuality: String, CaseIterable, Identifiable, Codable, Sendable
     public var advertisedSize: CGSize {
         switch self {
         case .ultra:
-            CGSize(width: 402, height: 874)
+            CGSize(width: 440, height: 956)
         case .high:
             CGSize(width: 402, height: 874)
         case .balanced, .lowBandwidth:
@@ -48,7 +48,7 @@ public enum StreamQuality: String, CaseIterable, Identifiable, Codable, Sendable
     public var advertisedPixelSize: CGSize {
         switch self {
         case .ultra:
-            CGSize(width: 1206, height: 2622)
+            CGSize(width: 1320, height: 2868)
         case .high:
             CGSize(width: 1080, height: 2340)
         case .balanced, .lowBandwidth:

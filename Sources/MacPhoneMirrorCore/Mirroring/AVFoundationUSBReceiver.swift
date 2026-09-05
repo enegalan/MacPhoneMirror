@@ -4,7 +4,9 @@ import CoreMedia
 import CoreVideo
 import Foundation
 
-public final class AVFoundationUSBReceiver: NSObject, ScreenMirrorReceiver, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
+public final class AVFoundationUSBReceiver: NSObject, ScreenMirrorReceiver,
+    AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable
+{
     private let captureSession = AVCaptureSession()
     private let videoOutput = AVCaptureVideoDataOutput()
     private let frameSubject = PassthroughSubject<VideoFrame, Never>()
@@ -68,47 +70,60 @@ public final class AVFoundationUSBReceiver: NSObject, ScreenMirrorReceiver, AVCa
         guard let device = chosenDevice else {
             setState(.failed("No compatible iPhone screen capture device found."))
             AppLogger.warning("No USB capture device found", category: .video)
-            throw NSError(domain: AppInfo.name, code: 404, userInfo: [NSLocalizedDescriptionKey: "No compatible iPhone USB capture device found."])
+            throw NSError(
+                domain: AppInfo.name,
+                code: 404,
+                userInfo: [NSLocalizedDescriptionKey: "No compatible iPhone USB capture device found."]
+            )
         }
 
         try await withCheckedThrowingContinuation { continuation in
             sessionQueue.async { [weak self] in
-                guard let self else { return }
-                do {
-                    captureSession.beginConfiguration()
-                    captureSession.sessionPreset = usbPreset()
-
-                    let input = try AVCaptureDeviceInput(device: device)
-                    if captureSession.canAddInput(input) {
-                        captureSession.addInput(input)
-                    }
-
-                    videoOutput.alwaysDiscardsLateVideoFrames = true
-                    videoOutput.videoSettings = [
-                        kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
-                    ]
-                    videoOutput.setSampleBufferDelegate(self, queue: videoQueue)
-
-                    if captureSession.canAddOutput(videoOutput) {
-                        captureSession.addOutput(videoOutput)
-                    }
-
-                    captureSession.commitConfiguration()
-                    captureSession.startRunning()
-
-                    lock.lock()
-                    _state = .running
-                    lock.unlock()
-
-                    AppLogger.info("AVFoundation USB Receiver running for device: \(device.localizedName)", category: .video)
-                    continuation.resume()
-                } catch {
-                    lock.lock()
-                    _state = .failed(error.localizedDescription)
-                    lock.unlock()
-                    continuation.resume(throwing: error)
-                }
+                self?.configureAndStartSession(device: device, continuation: continuation)
             }
+        }
+    }
+
+    private func configureAndStartSession(
+        device: AVCaptureDevice,
+        continuation: CheckedContinuation<Void, Error>
+    ) {
+        do {
+            captureSession.beginConfiguration()
+            captureSession.sessionPreset = usbPreset()
+
+            let input = try AVCaptureDeviceInput(device: device)
+            if captureSession.canAddInput(input) {
+                captureSession.addInput(input)
+            }
+
+            videoOutput.alwaysDiscardsLateVideoFrames = true
+            videoOutput.videoSettings = [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+            ]
+            videoOutput.setSampleBufferDelegate(self, queue: videoQueue)
+
+            if captureSession.canAddOutput(videoOutput) {
+                captureSession.addOutput(videoOutput)
+            }
+
+            captureSession.commitConfiguration()
+            captureSession.startRunning()
+
+            lock.lock()
+            _state = .running
+            lock.unlock()
+
+            AppLogger.info(
+                "AVFoundation USB Receiver running for device: \(device.localizedName)",
+                category: .video
+            )
+            continuation.resume()
+        } catch {
+            lock.lock()
+            _state = .failed(error.localizedDescription)
+            lock.unlock()
+            continuation.resume(throwing: error)
         }
     }
 

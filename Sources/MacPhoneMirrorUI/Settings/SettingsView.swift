@@ -1,12 +1,11 @@
 import MacPhoneMirrorCore
 import SwiftUI
 
+// swiftlint:disable file_length
 public struct SettingsView: View {
-    @Binding var frameStyle: FrameRenderStyle
+    @ObservedObject private var frameStyleStore = FrameStyleStore.shared
 
-    public init(frameStyle: Binding<FrameRenderStyle>) {
-        _frameStyle = frameStyle
-    }
+    public init() {}
 
     public var body: some View {
         ScrollView {
@@ -15,7 +14,7 @@ public struct SettingsView: View {
 
                 GeneralSettingsView()
                 MirroringSettingsView()
-                AppearanceSettingsView(frameStyle: $frameStyle)
+                AppearanceSettingsView(frameStyle: $frameStyleStore.style)
             }
             .padding(28)
         }
@@ -52,9 +51,8 @@ public struct SettingsView: View {
 }
 
 public struct GeneralSettingsView: View {
-    @AppStorage("launchAtLogin") private var launchAtLogin = false
-    @AppStorage("autoStartMirroring") private var autoStartMirroring = true
-    @State private var hovering = false
+    @State private var launchAtLogin = LaunchAtLogin.isEnabled
+    @State private var launchAtLoginError: String?
 
     public init() {}
 
@@ -65,15 +63,18 @@ public struct GeneralSettingsView: View {
                 tint: .orange,
                 title: "Launch \(AppInfo.displayName) at Login",
                 subtitle: "Start automatically whenever you log in to this Mac.",
-                isOn: $launchAtLogin
+                isOn: Binding(
+                    get: { launchAtLogin },
+                    set: { setLaunchAtLogin($0) }
+                )
             )
-            ToggleRow(
-                icon: "play.rectangle",
-                tint: .green,
-                title: "Auto-start screen mirroring on connect",
-                subtitle: "Begin mirroring as soon as a device connects.",
-                isOn: $autoStartMirroring
-            )
+
+            if let launchAtLoginError {
+                Text(launchAtLoginError)
+                    .font(.system(size: 11))
+                    .foregroundColor(.red)
+                    .padding(.leading, 38)
+            }
 
             SettingsDivider()
 
@@ -84,12 +85,28 @@ public struct GeneralSettingsView: View {
                 }
             }
         }
+        .onAppear {
+            launchAtLogin = LaunchAtLogin.isEnabled
+        }
+    }
+
+    private func setLaunchAtLogin(_ enabled: Bool) {
+        do {
+            try LaunchAtLogin.setEnabled(enabled)
+            launchAtLogin = LaunchAtLogin.isEnabled
+            launchAtLoginError = nil
+        } catch {
+            launchAtLogin = LaunchAtLogin.isEnabled
+            launchAtLoginError = error.localizedDescription
+            AppLogger.error("Launch at login failed: \(error.localizedDescription)", category: .session)
+        }
     }
 }
 
 private struct PermissionStatusRow: View {
     let permission: SystemPermission
-    @State private var status: Bool?
+    @State private var hasResolvedStatus = false
+    @State private var isGranted = false
     @State private var isHovered = false
 
     private var permissionIcon: String {
@@ -109,40 +126,10 @@ private struct PermissionStatusRow: View {
     var body: some View {
         HStack(spacing: 10) {
             SettingsRowIcon(permissionIcon, tint: permissionTint)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(permission.rawValue)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.primary)
-                Text(permission.reasonDescription)
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
+            permissionLabel
             Spacer()
-
-            if let granted = status {
-                Text(granted ? "Granted" : "Not Granted")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(granted ? .green : .red)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill((granted ? Color.green : Color.red).opacity(0.12)))
-            } else {
-                ProgressView()
-                    .controlSize(.small)
-            }
-
-            Button {
-                PermissionManager.shared.openSystemSettings(for: permission)
-            } label: {
-                Image(systemName: "arrow.up.right.square")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.secondary)
-            }
-            .buttonStyle(.plain)
-            .help("Open in System Settings")
+            statusIndicator
+            settingsLinkButton
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 7)
@@ -157,34 +144,64 @@ private struct PermissionStatusRow: View {
             }
         }
         .onAppear {
-            status = PermissionManager.shared.checkPermissionStatus(permission)
+            isGranted = PermissionManager.shared.checkPermissionStatus(permission)
+            hasResolvedStatus = true
         }
+    }
+
+    private var permissionLabel: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(permission.rawValue)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.primary)
+            Text(permission.reasonDescription)
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    @ViewBuilder
+    private var statusIndicator: some View {
+        if hasResolvedStatus {
+            Text(isGranted ? "Granted" : "Not Granted")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(isGranted ? .green : .red)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Capsule().fill((isGranted ? Color.green : Color.red).opacity(0.12)))
+        } else {
+            ProgressView()
+                .controlSize(.small)
+        }
+    }
+
+    private var settingsLinkButton: some View {
+        Button {
+            PermissionManager.shared.openSystemSettings(for: permission)
+        } label: {
+            Image(systemName: "arrow.up.right.square")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.secondary)
+        }
+        .buttonStyle(.plain)
+        .help("Open in System Settings")
     }
 }
 
 public struct MirroringSettingsView: View {
     @AppStorage("streamQuality") private var selectedQualityRaw = StreamQuality.ultra.rawValue
-    @State private var enableHardwareDecode = true
-    @State private var lowLatencyMode = true
+    @AppStorage(AppPreferences.Key.enableHardwareDecode) private var enableHardwareDecode = true
+    @AppStorage(AppPreferences.Key.lowLatencyMode) private var lowLatencyMode = true
+    @ObservedObject private var sessionManager = SessionManager.shared
+    @State private var showReconnectNotice = false
 
     public init() {}
 
     public var body: some View {
         SettingsCard(title: "Mirroring", subtitle: "Stream quality & video pipeline", icon: "display") {
-            SettingsPickerRow(
-                icon: "rectangle.compress.vertical",
-                tint: .blue,
-                title: "Stream Resolution"
-            ) {
-                Picker("Stream Resolution", selection: $selectedQualityRaw) {
-                    ForEach(StreamQuality.allCases) { quality in
-                        Text(quality.displayName).tag(quality.rawValue)
-                    }
-                }
-                .labelsHidden()
-                .fixedSize()
-            }
-
+            resolutionPicker
+            resolutionHints
             ToggleRow(
                 icon: "cpu",
                 tint: .teal,
@@ -200,6 +217,42 @@ public struct MirroringSettingsView: View {
                 isOn: $lowLatencyMode
             )
         }
+        .onChange(of: selectedQualityRaw) { _, _ in
+            showReconnectNotice = !sessionManager.sessions.isEmpty
+        }
+    }
+
+    private var resolutionPicker: some View {
+        SettingsPickerRow(
+            icon: "rectangle.compress.vertical",
+            tint: .blue,
+            title: "Stream Resolution"
+        ) {
+            Picker("Stream Resolution", selection: $selectedQualityRaw) {
+                ForEach(StreamQuality.allCases) { quality in
+                    Text(quality.displayName).tag(quality.rawValue)
+                }
+            }
+            .labelsHidden()
+            .fixedSize()
+        }
+    }
+
+    @ViewBuilder
+    private var resolutionHints: some View {
+        Text("Takes effect on the next AirPlay connection.")
+            .font(.system(size: 11))
+            .foregroundColor(.secondary)
+            .padding(.leading, 38)
+            .padding(.bottom, 4)
+
+        if showReconnectNotice {
+            Text("Reconnect AirPlay to apply the new resolution.")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.orange)
+                .padding(.leading, 38)
+                .padding(.bottom, 4)
+        }
     }
 }
 
@@ -212,45 +265,50 @@ public struct AppearanceSettingsView: View {
 
     public var body: some View {
         SettingsCard(title: "Appearance", subtitle: "How your iPhone frame is rendered", icon: "iphone") {
-            SettingsPickerRow(
-                icon: "square.3.layers.3d",
-                tint: .indigo,
-                title: "Frame Style"
-            ) {
-                Picker("Frame Style", selection: $frameStyle.displayMode) {
-                    ForEach(FrameDisplayMode.allCases) { mode in
-                        Text(mode.rawValue).tag(mode)
-                    }
+            appearanceControls
+        }
+    }
+
+    @ViewBuilder
+    private var appearanceControls: some View {
+        SettingsPickerRow(
+            icon: "square.3.layers.3d",
+            tint: .indigo,
+            title: "Frame Style"
+        ) {
+            Picker("Frame Style", selection: $frameStyle.displayMode) {
+                ForEach(FrameDisplayMode.allCases) { mode in
+                    Text(mode.rawValue).tag(mode)
                 }
-                .labelsHidden()
-                .fixedSize()
             }
+            .labelsHidden()
+            .fixedSize()
+        }
 
-            if frameStyle.displayMode == .realisticFrame {
-                FinishPickerView(frameStyle: $frameStyle)
+        if frameStyle.displayMode == .realisticFrame {
+            FinishPickerView(frameStyle: $frameStyle)
 
-                ToggleRow(
-                    icon: "button.programmable",
-                    tint: .green,
-                    title: "Hardware Buttons",
-                    subtitle: "Action button, volume and side power button.",
-                    isOn: $frameStyle.showHardwareButtons
-                )
-                ToggleRow(
-                    icon: "sun.max",
-                    tint: .orange,
-                    title: "Chassis Reflection",
-                    subtitle: "Realistic metal specular highlight.",
-                    isOn: $frameStyle.showReflection
-                )
-                ToggleRow(
-                    icon: "circle.lefthalf.filled",
-                    tint: .purple,
-                    title: "Realistic Drop Shadow",
-                    subtitle: "Soft shadow beneath the device.",
-                    isOn: $frameStyle.showShadow
-                )
-            }
+            ToggleRow(
+                icon: "button.programmable",
+                tint: .green,
+                title: "Hardware Buttons",
+                subtitle: "Action button, volume and side power button.",
+                isOn: $frameStyle.showHardwareButtons
+            )
+            ToggleRow(
+                icon: "sun.max",
+                tint: .orange,
+                title: "Chassis Reflection",
+                subtitle: "Realistic metal specular highlight.",
+                isOn: $frameStyle.showReflection
+            )
+            ToggleRow(
+                icon: "circle.lefthalf.filled",
+                tint: .purple,
+                title: "Realistic Drop Shadow",
+                subtitle: "Soft shadow beneath the device.",
+                isOn: $frameStyle.showShadow
+            )
         }
     }
 }
@@ -290,50 +348,54 @@ private struct FinishPickerView: View {
                 frameStyle.finish = finish
             }
         } label: {
-            HStack(spacing: 8) {
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            gradient: theme.metalGradient,
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 22, height: 22)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .stroke(Color.primary.opacity(0.15), lineWidth: 1)
-                    )
-
-                Text(finish.rawValue)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-
-                Spacer(minLength: 0)
-
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(.accentColor)
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(isSelected ? Color.accentColor.opacity(0.1) : Color.primary.opacity(0.03))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .stroke(
-                                isSelected ? Color.accentColor.opacity(0.5) : Color.primary.opacity(0.06),
-                                lineWidth: 1
-                            )
-                    )
-            )
+            chipLabel(finish: finish, theme: theme, isSelected: isSelected)
         }
         .buttonStyle(.plain)
+    }
+
+    private func chipLabel(finish: FrameFinish, theme: FrameThemeColors, isSelected: Bool) -> some View {
+        HStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        gradient: theme.metalGradient,
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 22, height: 22)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .stroke(Color.primary.opacity(0.15), lineWidth: 1)
+                )
+
+            Text(finish.rawValue)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+
+            Spacer(minLength: 0)
+
+            if isSelected {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(.accentColor)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(isSelected ? Color.accentColor.opacity(0.1) : Color.primary.opacity(0.03))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .stroke(
+                            isSelected ? Color.accentColor.opacity(0.5) : Color.primary.opacity(0.06),
+                            lineWidth: 1
+                        )
+                )
+        )
     }
 }
 

@@ -45,7 +45,12 @@ public final class TestPatternReceiver: ScreenMirrorReceiver, @unchecked Sendabl
             kCVPixelBufferCGImageCompatibilityKey as String: true,
             kCVPixelBufferCGBitmapContextCompatibilityKey as String: true,
         ]
-        CVPixelBufferPoolCreate(kCFAllocatorDefault, poolAttributes as CFDictionary, bufferAttributes as CFDictionary, &pixelBufferPool)
+        CVPixelBufferPoolCreate(
+            kCFAllocatorDefault,
+            poolAttributes as CFDictionary,
+            bufferAttributes as CFDictionary,
+            &pixelBufferPool
+        )
     }
 
     public func setOrientation(_ orientation: DeviceOrientation) {
@@ -141,26 +146,53 @@ public final class TestPatternReceiver: ScreenMirrorReceiver, @unchecked Sendabl
         frameSubject.send(frame)
     }
 
-    private func drawSimulatediOSUI(in context: CGContext, width: Int, height: Int, frameIndex: UInt64, ripples: [CGPoint]) {
-        let w = CGFloat(width)
-        let h = CGFloat(height)
-        let rect = CGRect(x: 0, y: 0, width: w, height: h)
+    private func drawSimulatediOSUI(
+        in context: CGContext,
+        width: Int,
+        height: Int,
+        frameIndex: UInt64,
+        ripples: [CGPoint]
+    ) {
+        let canvasWidth = CGFloat(width)
+        let canvasHeight = CGFloat(height)
+        drawWallpaper(in: context, width: canvasWidth, height: canvasHeight, frameIndex: frameIndex)
+        drawStatusBar(in: context, width: canvasWidth, height: canvasHeight)
+        drawAppGrid(in: context, width: canvasWidth, height: canvasHeight)
+        drawDock(in: context, width: canvasWidth, height: canvasHeight)
+        drawTouchRipples(in: context, width: canvasWidth, height: canvasHeight, ripples: ripples)
+    }
 
-        // Dynamic wallpaper gradient
+    private func drawWallpaper(in context: CGContext, width: CGFloat, height: CGFloat, frameIndex: UInt64) {
         let timeOffset = Double(frameIndex) * 0.015
         let hue1 = CGFloat((sin(timeOffset) + 1.0) / 2.0)
         let hue2 = CGFloat((cos(timeOffset * 0.7) + 1.0) / 2.0)
 
-        let color1 = NSColor(calibratedHue: 0.6 + (hue1 * 0.1), saturation: 0.75, brightness: 0.35, alpha: 1.0).cgColor
-        let color2 = NSColor(calibratedHue: 0.75 + (hue2 * 0.15), saturation: 0.65, brightness: 0.15, alpha: 1.0).cgColor
+        let color1 = NSColor(
+            calibratedHue: 0.6 + (hue1 * 0.1),
+            saturation: 0.75,
+            brightness: 0.35,
+            alpha: 1.0
+        ).cgColor
+        let color2 = NSColor(
+            calibratedHue: 0.75 + (hue2 * 0.15),
+            saturation: 0.65,
+            brightness: 0.15,
+            alpha: 1.0
+        ).cgColor
 
         let colors = [color1, color2] as CFArray
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         if let gradient = CGGradient(colorsSpace: colorSpace, colors: colors, locations: [0.0, 1.0]) {
-            context.drawLinearGradient(gradient, start: CGPoint(x: 0, y: 0), end: CGPoint(x: w, y: h), options: [])
+            context.drawLinearGradient(
+                gradient,
+                start: CGPoint(x: 0, y: 0),
+                end: CGPoint(x: width, y: height),
+                options: []
+            )
         }
+    }
 
-        // Draw Status Bar Clock
+    private func drawStatusBar(in context: CGContext, width: CGFloat, height: CGFloat) {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm"
         let timeString = formatter.string(from: Date())
@@ -173,29 +205,29 @@ public final class TestPatternReceiver: ScreenMirrorReceiver, @unchecked Sendabl
 
         let str = NSAttributedString(string: timeString, attributes: textAttributes)
         let line = CTLineCreateWithAttributedString(str)
-        context.textPosition = CGPoint(x: 100, y: h - 140)
+        context.textPosition = CGPoint(x: 100, y: height - 140)
         CTLineDraw(line, context)
 
-        // Draw Battery Icon & Wi-Fi in Status Bar
         context.setFillColor(NSColor.white.cgColor)
-        let batteryRect = CGRect(x: w - 180, y: h - 145, width: 80, height: 38)
+        let batteryRect = CGRect(x: width - 180, y: height - 145, width: 80, height: 38)
         let batteryPath = CGPath(roundedRect: batteryRect, cornerWidth: 8, cornerHeight: 8, transform: nil)
         context.addPath(batteryPath)
         context.setLineWidth(3)
         context.strokePath()
 
         let fillWidth = 60.0
-        let fillRect = CGRect(x: w - 176, y: h - 141, width: fillWidth, height: 30)
-        context.fill(CGRect(x: w - 97, y: h - 134, width: 5, height: 16)) // battery nub
+        let fillRect = CGRect(x: width - 176, y: height - 141, width: fillWidth, height: 30)
+        context.fill(CGRect(x: width - 97, y: height - 134, width: 5, height: 16))
         context.setFillColor(NSColor.systemGreen.cgColor)
         context.fill(fillRect)
+    }
 
-        // Draw App Grid (4x6 icons)
-        let cols = 4
+    private func drawAppGrid(in context: CGContext, width: CGFloat, height: CGFloat) {
+        let columns = 4
         let rows = 6
         let iconSize: CGFloat = 160
-        let spacingX = (w - (CGFloat(cols) * iconSize)) / CGFloat(cols + 1)
-        let startY = h - 420
+        let spacingX = (width - (CGFloat(columns) * iconSize)) / CGFloat(columns + 1)
+        let startY = height - 420
 
         let appColors: [NSColor] = [
             .systemBlue, .systemGreen, .systemOrange, .systemRed,
@@ -215,20 +247,19 @@ public final class TestPatternReceiver: ScreenMirrorReceiver, @unchecked Sendabl
             "Files", "Fitness", "Shortcuts", "Terminal",
         ]
 
-        for r in 0 ..< rows {
-            for c in 0 ..< cols {
-                let index = (r * cols) + c
-                let x = spacingX + CGFloat(c) * (iconSize + spacingX)
-                let y = startY - CGFloat(r) * (iconSize + 70)
+        for row in 0 ..< rows {
+            for column in 0 ..< columns {
+                let index = (row * columns) + column
+                let originX = spacingX + CGFloat(column) * (iconSize + spacingX)
+                let originY = startY - CGFloat(row) * (iconSize + 70)
 
-                let iconRect = CGRect(x: x, y: y, width: iconSize, height: iconSize)
+                let iconRect = CGRect(x: originX, y: originY, width: iconSize, height: iconSize)
                 let iconPath = CGPath(roundedRect: iconRect, cornerWidth: 38, cornerHeight: 38, transform: nil)
 
                 context.setFillColor(appColors[index % appColors.count].cgColor)
                 context.addPath(iconPath)
                 context.fillPath()
 
-                // App Name label
                 let nameFont = NSFont.systemFont(ofSize: 26, weight: .medium)
                 let nameAttr: [NSAttributedString.Key: Any] = [
                     .font: nameFont,
@@ -237,37 +268,38 @@ public final class TestPatternReceiver: ScreenMirrorReceiver, @unchecked Sendabl
                 let nameStr = NSAttributedString(string: appNames[index % appNames.count], attributes: nameAttr)
                 let nameLine = CTLineCreateWithAttributedString(nameStr)
                 let textBounds = CTLineGetBoundsWithOptions(nameLine, [])
-                let textX = x + (iconSize - textBounds.width) / 2.0
-                context.textPosition = CGPoint(x: textX, y: y - 35)
+                let textX = originX + (iconSize - textBounds.width) / 2.0
+                context.textPosition = CGPoint(x: textX, y: originY - 35)
                 CTLineDraw(nameLine, context)
             }
         }
+    }
 
-        // Draw Dock
+    private func drawDock(in context: CGContext, width: CGFloat, height _: CGFloat) {
         let dockHeight: CGFloat = 240
         let dockY: CGFloat = 80
-        let dockRect = CGRect(x: 40, y: dockY, width: w - 80, height: dockHeight)
+        let dockRect = CGRect(x: 40, y: dockY, width: width - 80, height: dockHeight)
         let dockPath = CGPath(roundedRect: dockRect, cornerWidth: 60, cornerHeight: 60, transform: nil)
         context.setFillColor(NSColor(white: 1.0, alpha: 0.22).cgColor)
         context.addPath(dockPath)
         context.fillPath()
 
-        // Draw Home Bar
-        let homeBarRect = CGRect(x: (w - 420) / 2.0, y: 30, width: 420, height: 14)
+        let homeBarRect = CGRect(x: (width - 420) / 2.0, y: 30, width: 420, height: 14)
         let homeBarPath = CGPath(roundedRect: homeBarRect, cornerWidth: 7, cornerHeight: 7, transform: nil)
         context.setFillColor(NSColor.white.cgColor)
         context.addPath(homeBarPath)
         context.fillPath()
+    }
 
-        // Draw Touch Ripples
+    private func drawTouchRipples(in context: CGContext, width: CGFloat, height: CGFloat, ripples: [CGPoint]) {
         for point in ripples {
-            let px = point.x * w
-            let py = (1.0 - point.y) * h // Invert Y for CGContext
+            let pointX = point.x * width
+            let pointY = (1.0 - point.y) * height
             context.setFillColor(NSColor(white: 1.0, alpha: 0.4).cgColor)
-            context.fillEllipse(in: CGRect(x: px - 40, y: py - 40, width: 80, height: 80))
+            context.fillEllipse(in: CGRect(x: pointX - 40, y: pointY - 40, width: 80, height: 80))
             context.setStrokeColor(NSColor.white.cgColor)
             context.setLineWidth(4)
-            context.strokeEllipse(in: CGRect(x: px - 60, y: py - 60, width: 120, height: 120))
+            context.strokeEllipse(in: CGRect(x: pointX - 60, y: pointY - 60, width: 120, height: 120))
         }
     }
 }

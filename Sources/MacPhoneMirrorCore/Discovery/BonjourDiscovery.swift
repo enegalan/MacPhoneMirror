@@ -82,7 +82,10 @@ public final class BonjourDiscovery: DeviceDiscovery, @unchecked Sendable {
 
         for result in results {
             guard case let .service(serviceName, _, _, _) = result.endpoint else { continue }
-            guard let displayName = resolveDisplayName(serviceName: serviceName, metadata: result.metadata) else { continue }
+            guard let displayName = resolveDisplayName(
+                serviceName: serviceName,
+                metadata: result.metadata
+            ) else { continue }
             guard displayName != AirPlayTXTRecordBuilder.serviceName else { continue }
 
             let key = DeviceDiscoveryFilter.normalizedDeviceKey(from: displayName)
@@ -91,8 +94,8 @@ public final class BonjourDiscovery: DeviceDiscovery, @unchecked Sendable {
 
             let model = mapModel(from: result.metadata)
             let device = PhoneDevice(
-                id: "bonjour-\(key)",
                 name: displayName,
+                id: "bonjour-\(key)",
                 model: model,
                 connectionType: .wifi,
                 isAvailable: true,

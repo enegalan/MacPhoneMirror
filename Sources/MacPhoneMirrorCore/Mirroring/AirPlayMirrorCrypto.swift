@@ -35,7 +35,9 @@ final class AirPlayMirrorDecryptor: @unchecked Sendable {
             ivBytes,
             keyBytes,
             keyBytes.count,
-            nil, 0, 0,
+            nil,
+            0,
+            0,
             CCModeOptions(kCCModeOptionCTR_BE),
             &created
         )

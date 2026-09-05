@@ -4,8 +4,8 @@ import Foundation
 public struct KeyboardShortcutMapper: Sendable {
     public init() {}
 
+    // swiftlint:disable cyclomatic_complexity
     /// Translates macOS NSEvent key code into USB HID keyboard usage code
-    // swiftlint:disable:next cyclomatic_complexity
     public static func hidKeyCode(for macKeyCode: UInt16) -> UInt8? {
         switch macKeyCode {
         case 0: 0x04 // A
@@ -57,6 +57,8 @@ public struct KeyboardShortcutMapper: Sendable {
             nil
         }
     }
+
+    // swiftlint:enable cyclomatic_complexity
 
     public static func hidModifier(from flags: NSEvent.ModifierFlags) -> UInt8 {
         var mod: UInt8 = 0

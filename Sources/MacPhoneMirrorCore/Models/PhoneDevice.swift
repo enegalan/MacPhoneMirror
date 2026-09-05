@@ -33,8 +33,8 @@ public struct PhoneDevice: Identifiable, Hashable, Codable, Sendable {
     public var ipAddress: String?
 
     public init(
-        id: String = UUID().uuidString,
         name: String,
+        id: String = UUID().uuidString,
         model: PhoneModel = .iPhone16Pro,
         connectionType: DeviceConnectionType = .usb,
         isAvailable: Bool = true,
@@ -85,8 +85,8 @@ public struct PhoneDevice: Identifiable, Hashable, Codable, Sendable {
     }
 
     public static let mockDevice = PhoneDevice(
-        id: "demo-iphone-16-pro",
         name: "Someone's iPhone",
+        id: "demo-iphone-16-pro",
         model: .iPhone16Pro,
         connectionType: .usb,
         isAvailable: true,

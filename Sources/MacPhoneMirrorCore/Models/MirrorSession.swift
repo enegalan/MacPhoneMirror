@@ -6,8 +6,8 @@ public struct MirrorSession: Identifiable, Hashable, Sendable {
     public var orientation: DeviceOrientation
 
     public init(
-        id: String = UUID().uuidString,
         device: PhoneDevice,
+        id: String = UUID().uuidString,
         orientation: DeviceOrientation = .portrait
     ) {
         self.id = id

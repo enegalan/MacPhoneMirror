@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.4] - 2026-09-05
+
+### Added
+
+- Launch at Login via `SMAppService`
+- Hardware VideoToolbox and low-latency decode toggles wired to the video pipeline
+- Shared persisted Appearance settings applied to live mirror windows
+- Control preferences wired: mouse gate, touch ripples, sensitivity
+- Unit tests for AppPreferences, Ultra vs High stream sizes, and pointer input gates
+- How to Connect button on the Service page
+
+### Fixed
+
+- Rapid AirPlay service toggle no longer races start/stop (stale starts cannot clear a newer listener or leave Bonjour half-registered)
+- Mirror TCP accept socket shuts down with the AirPlay service so reconnects get a clean dataPort
+
+### Changed
+
+- Ultra stream quality advertises a larger point and pixel size than High
+- STREAM negotiation XML includes pixel dimensions
+- Stream resolution UI notes that changes apply on the next AirPlay connection
+- Low-latency mode allows up to 5 in-flight decode frames before dropping (was 2)
+- New Finder / Dock app icon (with background); menu bar keeps the transparent logo
+- Connection and AssistiveTouch guides rewritten in plain language for end users
+- SwiftLint is clean
+
+### Removed
+
+- Keyboard shortcuts for AssistiveTouch actions (unreliable on macOS / HID)
+- Invert Scroll option and wheel-scroll capture (scroll via click-drag only)
+- Non-functional "Auto-start screen mirroring on connect" setting
+
 ## [1.3.5] - 2026-09-04
 
 ### Fixed

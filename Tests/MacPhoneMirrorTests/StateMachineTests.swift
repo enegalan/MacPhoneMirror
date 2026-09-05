@@ -42,8 +42,8 @@ struct StateMachineTests {
     @Test func mirrorSessionOpenCloseCycle() {
         let manager = SessionManager()
         let device = PhoneDevice(
-            id: "test-device-1",
             name: "Test iPhone",
+            id: "test-device-1",
             connectionType: .simulated
         )
         let receiver = TestPatternReceiver()
@@ -84,8 +84,8 @@ struct StateMachineTests {
 
     @Test func airPlaySessionReplacementClosesPreviousWindow() {
         let manager = SessionManager()
-        let first = PhoneDevice(id: "airplay-A", name: "Phone A", connectionType: .wifi)
-        let second = PhoneDevice(id: "airplay-B", name: "Phone B", connectionType: .wifi)
+        let first = PhoneDevice(name: "Phone A", id: "airplay-A", connectionType: .wifi)
+        let second = PhoneDevice(name: "Phone B", id: "airplay-B", connectionType: .wifi)
         let receiver = NetworkStreamReceiver.shared
         let transportA = SimulatedInputTransport()
         let transportB = SimulatedInputTransport()

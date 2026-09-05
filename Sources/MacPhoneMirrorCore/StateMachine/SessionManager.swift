@@ -2,6 +2,7 @@ import Combine
 import CoreGraphics
 import Foundation
 
+// swiftlint:disable file_length
 // swiftlint:disable:next type_body_length
 public final class SessionManager: ObservableObject, @unchecked Sendable {
     public static let shared = SessionManager()
@@ -12,8 +13,16 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
     @Published public var statistics: StreamStatistics = .init()
     @Published public var isServiceEnabled: Bool = true
 
-    public let sessionWindowOpenPublisher = PassthroughSubject<String, Never>()
-    public let sessionWindowClosePublisher = PassthroughSubject<String, Never>()
+    private let sessionWindowOpenSubject = PassthroughSubject<String, Never>()
+    private let sessionWindowCloseSubject = PassthroughSubject<String, Never>()
+
+    public var sessionWindowOpenPublisher: AnyPublisher<String, Never> {
+        sessionWindowOpenSubject.eraseToAnyPublisher()
+    }
+
+    public var sessionWindowClosePublisher: AnyPublisher<String, Never> {
+        sessionWindowCloseSubject.eraseToAnyPublisher()
+    }
 
     private let stateSubject = CurrentValueSubject<ConnectionState, Never>(.discovering)
     private let orientationSubject = CurrentValueSubject<DeviceOrientation, Never>(.portrait)
@@ -29,6 +38,7 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
     private let lock = NSLock()
     private var statsTimer: Timer?
     private var isListening = false
+    private var serviceGeneration: UInt64 = 0
     private var didSetupUSBAutoConnect = false
     private var connectedUSBDeviceID: String?
 
@@ -178,7 +188,7 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         }
 
         let sessionID = device.id
-        let session = MirrorSession(id: sessionID, device: device, orientation: .portrait)
+        let session = MirrorSession(device: device, id: sessionID, orientation: .portrait)
 
         lock.lock()
         if let previous = sessionReceivers[sessionID], previous !== receiver {
@@ -187,7 +197,7 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
             if !wasAirPlay {
                 previous.stop()
             }
-            sessionWindowClosePublisher.send(sessionID)
+            sessionWindowCloseSubject.send(sessionID)
         }
         sessionsByID[sessionID] = session
         sessionReceivers[sessionID] = receiver
@@ -198,7 +208,7 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         syncPublishedSessions()
         setOrientation(.portrait, sessionID: sessionID)
         setState(.mirroring(device))
-        sessionWindowOpenPublisher.send(sessionID)
+        sessionWindowOpenSubject.send(sessionID)
         AppLogger.info("Mirror session opened: \(device.name) (\(sessionID))", category: .session)
         return sessionID
     }
@@ -233,7 +243,7 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
 
         syncPublishedSessions()
         if publishClose {
-            sessionWindowClosePublisher.send(id)
+            sessionWindowCloseSubject.send(id)
         }
     }
 
@@ -258,6 +268,20 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         lock.unlock()
     }
 
+    private func bumpServiceGeneration() -> UInt64 {
+        lock.lock()
+        serviceGeneration += 1
+        let generation = serviceGeneration
+        lock.unlock()
+        return generation
+    }
+
+    private func isCurrentServiceGeneration(_ generation: UInt64) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return generation == serviceGeneration
+    }
+
     private func isAlreadyListening() -> Bool {
         lock.lock()
         defer { lock.unlock() }
@@ -265,12 +289,17 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
     }
 
     public func startListening() async {
-        if isAlreadyListening() {
+        let generation = bumpServiceGeneration()
+        await startListening(generation: generation)
+    }
+
+    private func startListening(generation: UInt64) async {
+        guard isServiceEnabled, isCurrentServiceGeneration(generation) else {
+            AppLogger.info("AirPlay service is disabled; skipping start.", category: .session)
             return
         }
 
-        guard isServiceEnabled else {
-            AppLogger.info("AirPlay service is disabled; skipping start.", category: .session)
+        if isAlreadyListening(), NetworkStreamReceiver.shared.isAdvertising {
             return
         }
 
@@ -280,15 +309,27 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
 
         do {
             try await NetworkStreamReceiver.shared.start()
+            guard isServiceEnabled, isCurrentServiceGeneration(generation) else {
+                NetworkStreamReceiver.shared.stop()
+                markListeningStopped()
+                AppLogger.info("AirPlay start aborted — service toggled off mid-start", category: .session)
+                return
+            }
             markListeningStarted()
             AppLogger.info("AirPlay receiver ready. Waiting for iPhone to connect.", category: .session)
         } catch {
+            guard isCurrentServiceGeneration(generation) else {
+                AppLogger.info("Ignoring stale AirPlay start failure after newer toggle", category: .session)
+                return
+            }
             markListeningStopped()
             let message = "Could not start AirPlay receiver: \(error.localizedDescription)"
             AppLogger.error(message, category: .session)
             setState(.failed(message))
             return
         }
+
+        guard isCurrentServiceGeneration(generation), isServiceEnabled else { return }
 
         Task {
             do {
@@ -303,6 +344,7 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
     }
 
     private func stopListening() {
+        _ = bumpServiceGeneration()
         markListeningStopped()
         NetworkStreamReceiver.shared.stop()
         BluetoothHIDTransport.shared.stopAdvertising()
@@ -337,8 +379,8 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
 
     private func handleIncomingAirPlay(from deviceName: String) {
         let device = PhoneDevice(
-            id: "airplay-\(deviceName)",
             name: deviceName,
+            id: "airplay-\(deviceName)",
             connectionType: .wifi,
             isPairedForControl: false
         )
@@ -473,7 +515,8 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         UserDefaults.standard.set(enabled, forKey: "airplay.serviceEnabled")
 
         if enabled {
-            Task { await startListening() }
+            let generation = bumpServiceGeneration()
+            Task { await startListening(generation: generation) }
         } else {
             stopListening()
         }
@@ -544,6 +587,7 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         viewportSize: CGSize,
         sessionID: String? = nil
     ) async {
+        guard AppPreferences.enableMouseControl else { return }
         guard let sessionID = resolvedSessionID(sessionID),
               let normPoint = normalizedPoint(viewportPoint, viewportSize: viewportSize, sessionID: sessionID)
         else { return }
@@ -557,6 +601,7 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         viewportSize: CGSize,
         sessionID: String? = nil
     ) async {
+        guard AppPreferences.enableMouseControl else { return }
         guard let sessionID = resolvedSessionID(sessionID),
               let normPoint = normalizedPoint(viewportPoint, viewportSize: viewportSize, sessionID: sessionID)
         else { return }
@@ -570,10 +615,14 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         viewportSize: CGSize,
         sessionID: String? = nil
     ) async {
+        guard AppPreferences.enableMouseControl else { return }
         guard let sessionID = resolvedSessionID(sessionID) else { return }
 
         if let normPoint = normalizedPoint(viewportPoint, viewportSize: viewportSize, sessionID: sessionID) {
-            try? await sendInputEvent(.pointerTo(normalizedX: normPoint.x, normalizedY: normPoint.y), sessionID: sessionID)
+            try? await sendInputEvent(
+                .pointerTo(normalizedX: normPoint.x, normalizedY: normPoint.y),
+                sessionID: sessionID
+            )
         }
         try? await sendInputEvent(.pointerUp(button: .left), sessionID: sessionID)
     }

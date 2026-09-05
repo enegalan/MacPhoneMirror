@@ -1,6 +1,7 @@
 import CoreBluetooth
 import Foundation
 
+// swiftlint:disable file_length
 // swiftlint:disable:next type_body_length
 public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchecked Sendable {
     public static let shared = BluetoothHIDTransport()
@@ -45,7 +46,11 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
     private var lastAbsX: UInt16 = 0
     private var lastAbsY: UInt16 = 0
     /// Relative pointer deltas → absolute axis steps (HID units per “point”).
-    private let relativeMoveScale: Double = 48
+    private let baseRelativeMoveScale: Double = 48
+
+    private var relativeMoveScale: Double {
+        baseRelativeMoveScale * AppPreferences.mouseSensitivity
+    }
 
     private let lock = NSLock()
     private var connectWaiters: [CheckedContinuation<Void, Error>] = []
@@ -63,7 +68,10 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
                 let timeout = NSError(
                     domain: AppInfo.name,
                     code: 408,
-                    userInfo: [NSLocalizedDescriptionKey: "Bluetooth HID advertising timed out. Grant Bluetooth permission and ensure Bluetooth is On."]
+                    userInfo: [
+                        NSLocalizedDescriptionKey: "Bluetooth HID advertising timed out. "
+                            + "Grant Bluetooth permission and ensure Bluetooth is On.",
+                    ]
                 )
                 // Resume waiters before this task throws so connectOnce cannot hang
                 // under task-group cancellation waiting on an unresumed continuation.
@@ -125,17 +133,24 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
         }
     }
 
+    // swiftlint:disable:next cyclomatic_complexity
     public func send(_ event: PhoneInputEvent) async throws {
         guard isConnected else {
             throw NSError(
                 domain: AppInfo.name,
                 code: 401,
-                userInfo: [NSLocalizedDescriptionKey: "Bluetooth HID is not advertising. Enable Bluetooth and pair via AssistiveTouch."]
+                userInfo: [
+                    NSLocalizedDescriptionKey: "Bluetooth HID is not advertising. "
+                        + "Enable Bluetooth and pair via AssistiveTouch.",
+                ]
             )
         }
 
         if !hasSubscribers {
-            AppLogger.debug("HID event dropped — no iPhone subscribed yet. Pair in AssistiveTouch → Devices.", category: .input)
+            AppLogger.debug(
+                "HID event dropped — no iPhone subscribed yet. Pair in AssistiveTouch → Devices.",
+                category: .input
+            )
             return
         }
 
@@ -154,8 +169,9 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
             let btn = setButton(button, pressed: false)
             transmitMouseReport(currentAbsoluteReport(buttons: btn))
 
-        case let .scroll(_, dy):
-            applyRelativeMove(dx: 0, dy: 0, wheel: Int8(clamping: Int(dy.rounded())))
+        case .scroll:
+            // Scroll is done by click-drag in the mirror viewport; ignore wheel events.
+            break
 
         case let .keyDown(keyCode, modifiers):
             transmitKeyboardReport(HIDKeyboardReport(modifiers: modifiers, keyCodes: [keyCode]))
@@ -164,21 +180,45 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
             transmitKeyboardReport(HIDKeyboardReport(modifiers: 0, keyCodes: []))
 
         case .homeButton:
-            try await sendKeyChord(modifiers: KeyModifier.leftGUI.rawValue, keyCode: 0x0B)
+            // Quick swipe up from home indicator → Home Screen.
+            try await performDrag(
+                from: (0.5, 0.98),
+                to: (0.5, 0.55),
+                steps: 4,
+                stepDelayNs: 18_000_000,
+                holdAtEndNs: 0
+            )
 
         case .appSwitcher:
-            try await sendKeyChord(modifiers: KeyModifier.leftGUI.rawValue, keyCode: 0x2B)
+            // Swipe up and pause → App Switcher.
+            try await performDrag(
+                from: (0.5, 0.98),
+                to: (0.5, 0.42),
+                steps: 8,
+                stepDelayNs: 30_000_000,
+                holdAtEndNs: 350_000_000
+            )
 
         case .lockScreen:
             try await sendConsumerPulse(.power)
 
         case .controlCenter:
-            movePointerAbsolute(normalizedX: 0.92, normalizedY: 0.02)
-            try await clickLeft()
+            try await performDrag(
+                from: (0.92, 0.005),
+                to: (0.92, 0.45),
+                steps: 8,
+                stepDelayNs: 28_000_000,
+                holdAtEndNs: 0
+            )
 
         case .notificationCenter:
-            movePointerAbsolute(normalizedX: 0.5, normalizedY: 0.02)
-            try await clickLeft()
+            try await performDrag(
+                from: (0.5, 0.005),
+                to: (0.5, 0.48),
+                steps: 8,
+                stepDelayNs: 28_000_000,
+                holdAtEndNs: 0
+            )
 
         case .volumeUp:
             try await sendConsumerPulse(.volumeIncrement)
@@ -187,7 +227,8 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
             try await sendConsumerPulse(.volumeDecrement)
 
         case .siri:
-            try await sendConsumerPulse(.acSearch)
+            // Side-button long-press approximation via consumer Voice Command.
+            try await sendConsumerPulse(.voiceCommand)
 
         case let .swipe(direction):
             try await performSwipe(direction)
@@ -253,13 +294,35 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
             start = (0.2, 0.5)
             end = (0.8, 0.5)
         }
+        try await performDrag(from: start, to: end, steps: 5, stepDelayNs: 20_000_000, holdAtEndNs: 0)
+    }
+
+    private func performDrag(
+        from start: (Double, Double),
+        to end: (Double, Double),
+        steps: Int,
+        stepDelayNs: UInt64,
+        holdAtEndNs: UInt64
+    ) async throws {
+        let count = max(steps, 2)
         movePointerAbsolute(normalizedX: start.0, normalizedY: start.1)
         try await Task.sleep(nanoseconds: 20_000_000)
         let down = setButton(.left, pressed: true)
         transmitMouseReport(currentAbsoluteReport(buttons: down))
         try await Task.sleep(nanoseconds: 30_000_000)
-        movePointerAbsolute(normalizedX: end.0, normalizedY: end.1)
-        try await Task.sleep(nanoseconds: 20_000_000)
+
+        for index in 1 ... count {
+            let progress = Double(index) / Double(count)
+            let x = start.0 + (end.0 - start.0) * progress
+            let y = start.1 + (end.1 - start.1) * progress
+            movePointerAbsolute(normalizedX: x, normalizedY: y)
+            try await Task.sleep(nanoseconds: stepDelayNs)
+        }
+
+        if holdAtEndNs > 0 {
+            try await Task.sleep(nanoseconds: holdAtEndNs)
+        }
+
         let up = setButton(.left, pressed: false)
         transmitMouseReport(currentAbsoluteReport(buttons: up))
     }
@@ -491,6 +554,7 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
         return service
     }
 
+    // swiftlint:disable:next function_body_length
     private func buildHIDService() -> CBMutableService {
         let service = CBMutableService(type: BluetoothHIDProfile.hidService, primary: true)
         // Keep Battery as a separate primary service. Including the wrong CBService
@@ -614,7 +678,10 @@ extension BluetoothHIDTransport: CBPeripheralManagerDelegate {
             resumeConnectWaiters(error: NSError(
                 domain: AppInfo.name,
                 code: 403,
-                userInfo: [NSLocalizedDescriptionKey: "Bluetooth permission denied. Enable Bluetooth access in System Settings."]
+                userInfo: [
+                    NSLocalizedDescriptionKey: "Bluetooth permission denied. "
+                        + "Enable Bluetooth access in System Settings.",
+                ]
             ))
         case .poweredOff:
             lock.lock()
@@ -711,7 +778,9 @@ extension BluetoothHIDTransport: CBPeripheralManagerDelegate {
             notify(mouse, characteristic: mouseReportChar)
         } else if characteristic.uuid == BluetoothHIDProfile.bootMouseInput {
             notify(Data([0, 0, 0, 0]), characteristic: bootMouseChar)
-        } else if characteristic.uuid == BluetoothHIDProfile.bootKeyboardInput || characteristic === keyboardReportChar {
+        } else if characteristic.uuid == BluetoothHIDProfile.bootKeyboardInput
+            || characteristic === keyboardReportChar
+        {
             notify(keyboard, characteristic: keyboardReportChar)
             notify(keyboard, characteristic: bootKeyboardChar)
         } else if characteristic === consumerReportChar {
@@ -738,6 +807,7 @@ extension BluetoothHIDTransport: CBPeripheralManagerDelegate {
         drainPendingNotifications(using: peripheral)
     }
 
+    // swiftlint:disable:next cyclomatic_complexity
     public func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveRead request: CBATTRequest) {
         let value: Data? = switch request.characteristic.uuid {
         case BluetoothHIDProfile.batteryLevel:

@@ -4,7 +4,6 @@ import SwiftUI
 
 public struct MainWindowView: View {
     @State private var selectedTab: AppNavigationTab = .allCases.first!
-    @State private var frameStyle = FrameRenderStyle.standard
 
     @ObservedObject private var sessionManager = SessionManager.shared
 
@@ -18,11 +17,10 @@ public struct MainWindowView: View {
             SidebarView(
                 selectedTab: $selectedTab,
                 activeState: sessionManager.state,
-                sessions: sessionManager.sessions,
-                onFocusSession: { sessionID in
-                    openWindow(id: MirrorWindowID.session, value: sessionID)
-                }
-            )
+                sessions: sessionManager.sessions
+            ) { sessionID in
+                openWindow(id: MirrorWindowID.session, value: sessionID)
+            }
             .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 280)
         } detail: {
             Group {
@@ -32,15 +30,15 @@ public struct MainWindowView: View {
                 case .control:
                     ControlConfigView()
                 case .settings:
-                    SettingsView(frameStyle: $frameStyle)
+                    SettingsView()
                 }
             }
             .toolbar {
                 ToolbarItem(placement: .automatic) {
                     if !sessionManager.sessions.isEmpty {
-                        Button(role: .destructive, action: { sessionManager.disconnect() }) {
+                        Button(role: .destructive, action: { sessionManager.disconnect() }, label: {
                             Label("Stop All", systemImage: "xmark.circle")
-                        }
+                        })
                     }
                 }
             }

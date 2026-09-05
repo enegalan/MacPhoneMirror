@@ -2,6 +2,8 @@ import CryptoKit
 import Foundation
 import Network
 
+// swiftlint:disable file_length
+
 struct AirPlayHTTPRequest {
     let method: String
     let path: String
@@ -74,41 +76,54 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
     }
 
     private func receive() {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 131_072) { [weak self] content, _, isComplete, error in
-            guard let self else { return }
-
-            if let content, !content.isEmpty {
-                cancelIdleLog()
-                if !didLogFirstBytes {
-                    didLogFirstBytes = true
-                    let preview = content.prefix(48).map { String(format: "%02x", $0) }.joined(separator: " ")
-                    AppLogger.info("AirPlay first bytes (\(content.count)B): \(preview)", category: .airplay)
-                    if let text = String(data: content.prefix(120), encoding: .utf8), text.contains("RTSP") || text.contains("GET") || text.contains("POST") {
-                        AppLogger.info("AirPlay first line: \(text.split(separator: "\r\n").first ?? "")", category: .airplay)
-                    }
-                }
-                buffer.append(content)
-                processBuffer()
-            }
-
-            if let error {
-                AppLogger.warning("AirPlay receive ended: \(error.localizedDescription)", category: .airplay)
-                finish()
-                return
-            }
-
-            if isComplete {
-                if buffer.isEmpty {
-                    AppLogger.warning("AirPlay connection closed with no data", category: .airplay)
-                } else {
-                    AppLogger.warning("AirPlay connection closed with \(buffer.count) unparsed bytes", category: .airplay)
-                }
-                finish()
-                return
-            }
-
-            receive()
+        connection.receive(
+            minimumIncompleteLength: 1,
+            maximumLength: 131_072
+        ) { [weak self] content, _, isComplete, error in
+            self?.handleReceive(content: content, isComplete: isComplete, error: error)
         }
+    }
+
+    private func handleReceive(content: Data?, isComplete: Bool, error: Error?) {
+        if let content, !content.isEmpty {
+            cancelIdleLog()
+            if !didLogFirstBytes {
+                didLogFirstBytes = true
+                let preview = content.prefix(48).map { String(format: "%02x", $0) }.joined(separator: " ")
+                AppLogger.info("AirPlay first bytes (\(content.count)B): \(preview)", category: .airplay)
+                if let text = String(data: content.prefix(120), encoding: .utf8),
+                   text.contains("RTSP") || text.contains("GET") || text.contains("POST")
+                {
+                    AppLogger.info(
+                        "AirPlay first line: \(text.split(separator: "\r\n").first ?? "")",
+                        category: .airplay
+                    )
+                }
+            }
+            buffer.append(content)
+            processBuffer()
+        }
+
+        if let error {
+            AppLogger.warning("AirPlay receive ended: \(error.localizedDescription)", category: .airplay)
+            finish()
+            return
+        }
+
+        if isComplete {
+            if buffer.isEmpty {
+                AppLogger.warning("AirPlay connection closed with no data", category: .airplay)
+            } else {
+                AppLogger.warning(
+                    "AirPlay connection closed with \(buffer.count) unparsed bytes",
+                    category: .airplay
+                )
+            }
+            finish()
+            return
+        }
+
+        receive()
     }
 
     private func processBuffer() {
@@ -156,6 +171,7 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
         return AirPlayHTTPRequest(method: parts[0], path: path, headers: headers, body: body, cSeq: cSeq)
     }
 
+    // swiftlint:disable:next cyclomatic_complexity
     private func handle(_ request: AirPlayHTTPRequest) {
         if request.headers["session"] != nil || AirPlaySessionContext.shared.isSessionActive() {
             sessionIsActive = true
@@ -215,6 +231,7 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
         )
     }
 
+    // swiftlint:disable:next function_body_length
     private func handlePairVerify(body: Data, cSeq: Int) {
         if body.count == 68, body.prefix(4) == Data([1, 0, 0, 0]) {
             let clientECDH = body.subdata(in: 4 ..< 36)
@@ -228,7 +245,10 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
             ecdhPublicKeyData = ecdhPublic
 
             do {
-                let shared = try AirPlayCrypto.sharedSecret(serverPrivateKey: ecdhPrivate, clientPublicKeyData: clientECDH)
+                let shared = try AirPlayCrypto.sharedSecret(
+                    serverPrivateKey: ecdhPrivate,
+                    clientPublicKeyData: clientECDH
+                )
                 let (aesKey, aesIV) = AirPlayCrypto.derivePairVerifyKeyIV(sharedSecret: shared)
                 let message = ecdhPublic + clientECDH
                 let signature = try identity.signingPrivateKey.signature(for: message)
@@ -258,7 +278,10 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
         {
             let encryptedSignature = body.subdata(in: 4 ..< 68)
             do {
-                let shared = try AirPlayCrypto.sharedSecret(serverPrivateKey: ecdhPrivate, clientPublicKeyData: clientECDH)
+                let shared = try AirPlayCrypto.sharedSecret(
+                    serverPrivateKey: ecdhPrivate,
+                    clientPublicKeyData: clientECDH
+                )
                 let (aesKey, aesIV) = AirPlayCrypto.derivePairVerifyKeyIV(sharedSecret: shared)
                 let decrypted = AirPlayCrypto.aesCTR128(data: encryptedSignature, key: aesKey, iv: aesIV)
                 let message = clientECDH + ecdhPrivate.publicKey.rawRepresentation
@@ -387,7 +410,8 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
         sendResponse(
             status: "200 OK",
             headers: [
-                "Public": "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, GET",
+                "Public":
+                    "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, GET",
             ],
             body: Data(),
             cSeq: cSeq
@@ -437,6 +461,7 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
         }
     }
 
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     private func buildSetupResponse(from body: Data) throws -> Data {
         guard let root = try PropertyListSerialization.propertyList(from: body, format: nil) as? [String: Any] else {
             throw SetupError.invalidPlist

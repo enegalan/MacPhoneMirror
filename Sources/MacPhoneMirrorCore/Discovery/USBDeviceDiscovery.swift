@@ -81,8 +81,8 @@ public final class USBDeviceDiscovery: NSObject, DeviceDiscovery, @unchecked Sen
             let name = dev.localizedName
             let model = mapNameToModel(name)
             let phone = PhoneDevice(
-                id: dev.uniqueID,
                 name: name,
+                id: dev.uniqueID,
                 model: model,
                 connectionType: .usb,
                 isAvailable: true,
@@ -95,10 +95,8 @@ public final class USBDeviceDiscovery: NSObject, DeviceDiscovery, @unchecked Sen
     }
 
     private func mapNameToModel(_ name: String) -> PhoneModel {
-        for model in PhoneModel.allCases {
-            if name.contains(model.rawValue) {
-                return model
-            }
+        for model in PhoneModel.allCases where name.contains(model.rawValue) {
+            return model
         }
         return .iPhone16Pro
     }

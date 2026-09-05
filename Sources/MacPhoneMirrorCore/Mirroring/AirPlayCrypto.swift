@@ -35,7 +35,9 @@ enum AirPlayCrypto {
             ivBytes,
             keyBytes,
             keyBytes.count,
-            nil, 0, 0,
+            nil,
+            0,
+            0,
             CCModeOptions(kCCModeOptionCTR_BE),
             &cryptor
         )

@@ -12,6 +12,7 @@ public struct MirrorViewportView: View {
     @State private var acceptingPointerGesture = true
     @State private var pointerGestureTask: Task<Void, Never>?
     @State private var lastMoveSentAt = Date.distantPast
+    @State private var ripples: [TouchRipple] = []
 
     public init(
         sessionID: String,
@@ -27,46 +28,61 @@ public struct MirrorViewportView: View {
 
     public var body: some View {
         GeometryReader { proxy in
-            let naturalSize = naturalFrameSize
-            let scale = fittedScale(naturalSize: naturalSize, in: proxy.size)
-            let displaySize = CGSize(
-                width: naturalSize.width * scale,
-                height: naturalSize.height * scale
-            )
+            viewportContent(in: proxy.size)
+        }
+    }
 
+    private func viewportContent(in containerSize: CGSize) -> some View {
+        let naturalSize = naturalFrameSize
+        let scale = fittedScale(naturalSize: naturalSize, in: containerSize)
+        let displaySize = CGSize(
+            width: naturalSize.width * scale,
+            height: naturalSize.height * scale
+        )
+
+        return ZStack {
+            Color(nsColor: .underPageBackgroundColor).ignoresSafeArea()
+
+            VStack(spacing: 4) {
+                Spacer(minLength: 0)
+                phoneFrame(scale: scale, displaySize: displaySize)
+                Spacer(minLength: 0)
+            }
+        }
+        .onAppear { bindReceiver() }
+        .onChange(of: sessionID) { _, _ in bindReceiver() }
+    }
+
+    private func phoneFrame(scale: CGFloat, displaySize: CGSize) -> some View {
+        PhoneFrameView(
+            model: device.model,
+            orientation: orientation,
+            style: style,
+            sessionID: sessionID
+        ) {
             ZStack {
-                Color(nsColor: .underPageBackgroundColor).ignoresSafeArea()
+                MetalVideoView(stateHolder: metalHolder)
+                    .frame(width: screenSize.width, height: screenSize.height)
+                    .contentShape(Rectangle())
+                    .gesture(pointerDragGesture)
 
-                VStack(spacing: 4) {
-                    Spacer(minLength: 0)
-
-                    PhoneFrameView(
-                        model: device.model,
-                        orientation: orientation,
-                        style: style,
-                        sessionID: sessionID
-                    ) {
-                        MetalVideoView(stateHolder: metalHolder)
-                            .frame(width: screenSize.width, height: screenSize.height)
-                            .contentShape(Rectangle())
-                            .gesture(pointerDragGesture)
-                    }
-                    // scaleEffect does not change layout size; pin the layout box
-                    // to the visual size so the phone stays centered and never clips.
-                    .scaleEffect(scale)
-                    .frame(width: displaySize.width, height: displaySize.height)
-
-                    Spacer(minLength: 0)
+                ForEach(ripples) { ripple in
+                    Circle()
+                        .stroke(Color.white.opacity(ripple.opacity), lineWidth: 2)
+                        .frame(width: ripple.radius * 2, height: ripple.radius * 2)
+                        .position(ripple.point)
+                        .allowsHitTesting(false)
                 }
             }
-            .onAppear { bindReceiver() }
-            .onChange(of: sessionID) { _, _ in bindReceiver() }
         }
+        .scaleEffect(scale)
+        .frame(width: displaySize.width, height: displaySize.height)
     }
 
     private var pointerDragGesture: some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
+                guard AppPreferences.enableMouseControl else { return }
                 guard acceptingPointerGesture || isDragging else { return }
                 let point = value.location
                 let start = value.startLocation
@@ -79,6 +95,7 @@ public struct MirrorViewportView: View {
                         guard acceptingPointerGesture else { return }
                         acceptingPointerGesture = false
                         isDragging = true
+                        spawnRipple(at: start)
                         await SessionManager.shared.handlePointerDown(
                             at: start,
                             viewportSize: viewport,
@@ -87,7 +104,6 @@ public struct MirrorViewportView: View {
                     }
 
                     let now = Date()
-                    // ~60 Hz max — BLE HID cannot absorb every mouse pixel.
                     guard now.timeIntervalSince(lastMoveSentAt) >= 0.016 else { return }
                     lastMoveSentAt = now
                     await SessionManager.shared.handlePointerMove(
@@ -98,6 +114,7 @@ public struct MirrorViewportView: View {
                 }
             }
             .onEnded { value in
+                guard AppPreferences.enableMouseControl || isDragging else { return }
                 let point = value.location
                 let viewport = screenSize
                 let id = sessionID
@@ -118,6 +135,21 @@ public struct MirrorViewportView: View {
             }
     }
 
+    private func spawnRipple(at point: CGPoint) {
+        guard AppPreferences.showTouchRipples else { return }
+        let ripple = TouchRipple(point: point)
+        ripples.append(ripple)
+        withAnimation(.easeOut(duration: 0.45)) {
+            if let index = ripples.firstIndex(where: { $0.id == ripple.id }) {
+                ripples[index].radius = 36
+                ripples[index].opacity = 0
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            ripples.removeAll { $0.id == ripple.id }
+        }
+    }
+
     private func bindReceiver() {
         if let rec = SessionManager.shared.receiver(for: sessionID) {
             metalHolder.bind(to: rec)
@@ -128,7 +160,6 @@ public struct MirrorViewportView: View {
         orientation.orientedSize(for: device.model.pointSize)
     }
 
-    /// Unscaled outer size of `PhoneFrameView` for the current style/orientation.
     private var naturalFrameSize: CGSize {
         let oriented = orientation.orientedSize(for: device.model.pointSize)
         switch style.displayMode {
@@ -155,7 +186,13 @@ public struct MirrorViewportView: View {
             availableHeight / max(naturalSize.height, 1)
         )
         let preferredScale = min(fitScale, 1.0) * CGFloat(style.scaleFactor)
-        // Never exceed the container — landscape must shrink into a portrait-shaped window.
         return max(min(preferredScale, fitScale), 0.05)
     }
+}
+
+private struct TouchRipple: Identifiable {
+    let id = UUID()
+    let point: CGPoint
+    var radius: CGFloat = 8
+    var opacity: Double = 0.85
 }

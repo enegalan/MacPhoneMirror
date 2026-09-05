@@ -66,7 +66,8 @@ public enum PhoneModel: String, CaseIterable, Identifiable, Codable, Sendable {
         switch self {
         case .iPhone16ProMax, .iPhone16Pro:
             56.0
-        case .iPhone16Plus, .iPhone16, .iPhone15ProMax, .iPhone15Pro, .iPhone15Plus, .iPhone15, .iPhone14ProMax, .iPhone14Pro, .genericModern:
+        case .iPhone16Plus, .iPhone16, .iPhone15ProMax, .iPhone15Pro,
+             .iPhone15Plus, .iPhone15, .iPhone14ProMax, .iPhone14Pro, .genericModern:
             53.0
         case .iPhone14, .iPhone13Pro, .iPhone13:
             47.0

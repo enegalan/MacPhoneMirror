@@ -56,7 +56,11 @@ public enum AppLogger {
     }
 
     private static func echoToConsole(_ message: String, category: LogCategory, level: String) {
-        guard category == .airplay || category == .session || category == .network || category == .bluetooth else { return }
+        guard category == .airplay
+            || category == .session
+            || category == .network
+            || category == .bluetooth
+        else { return }
         let line = "[\(AppInfo.name)][\(category.rawValue)][\(level)] \(message)\n"
         if let data = line.data(using: .utf8) {
             FileHandle.standardError.write(data)

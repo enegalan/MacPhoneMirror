@@ -6,6 +6,7 @@ public struct ServiceView: View {
     @State private var serviceName: String = AirPlayTXTRecordBuilder.serviceName
     @State private var isEditingName = false
     @State private var isSavingName = false
+    @State private var showingConnectionGuide = false
 
     public init() {}
 
@@ -18,6 +19,9 @@ public struct ServiceView: View {
                 devicesCard
             }
             .padding(28)
+        }
+        .sheet(isPresented: $showingConnectionGuide) {
+            PairingGuideView(initialTab: 1)
         }
     }
 
@@ -47,11 +51,22 @@ public struct ServiceView: View {
             }
 
             Spacer()
+
+            Button {
+                showingConnectionGuide = true
+            } label: {
+                Label("How to Connect", systemImage: "questionmark.circle")
+            }
+            .buttonStyle(.borderedProminent)
         }
     }
 
     private var serviceCard: some View {
-        SettingsCard(title: "AirPlay Service", subtitle: "Receiver configuration", icon: "antenna.radiowaves.left.and.right") {
+        SettingsCard(
+            title: "AirPlay Service",
+            subtitle: "Receiver configuration",
+            icon: "antenna.radiowaves.left.and.right"
+        ) {
             ToggleRow(
                 icon: "power",
                 tint: .green,
@@ -65,48 +80,64 @@ public struct ServiceView: View {
 
             SettingsDivider()
 
-            HStack(spacing: 10) {
-                SettingsRowIcon("textformat", tint: .blue)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Device Name")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.primary)
-                    Text("The name shown in iPhone Screen Mirroring list.")
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                }
-                Spacer()
-
-                if isEditingName {
-                    TextField("Device Name", text: $serviceName)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(maxWidth: 200)
-                        .onSubmit {
-                            confirmNameChange()
-                        }
-                } else {
-                    Text(serviceName)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.primary)
-                        .lineLimit(1)
-                }
-
-                if isEditingName {
-                    SubtleIconButton(systemName: "checkmark", action: confirmNameChange)
-                        .disabled(isSavingName)
-                } else {
-                    SubtleIconButton(systemName: "pencil", action: beginEditing)
-                }
-
-                if isSavingName {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-            }
-            .padding(.vertical, 6)
+            deviceNameRow
         }
         .onAppear {
             serviceName = AirPlayTXTRecordBuilder.serviceName
+        }
+    }
+
+    private var deviceNameRow: some View {
+        HStack(spacing: 10) {
+            SettingsRowIcon("textformat", tint: .blue)
+            deviceNameLabels
+            Spacer()
+            deviceNameEditor
+            deviceNameActions
+        }
+        .padding(.vertical, 6)
+    }
+
+    private var deviceNameLabels: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Device Name")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.primary)
+            Text("The name shown in iPhone Screen Mirroring list.")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var deviceNameEditor: some View {
+        if isEditingName {
+            TextField("Device Name", text: $serviceName)
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: 200)
+                .onSubmit {
+                    confirmNameChange()
+                }
+        } else {
+            Text(serviceName)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.primary)
+                .lineLimit(1)
+        }
+    }
+
+    @ViewBuilder
+    private var deviceNameActions: some View {
+        if isEditingName {
+            SubtleIconButton(systemName: "checkmark", action: confirmNameChange)
+                .disabled(isSavingName)
+        } else {
+            SubtleIconButton(systemName: "pencil", action: beginEditing)
+        }
+
+        if isSavingName {
+            ProgressView()
+                .controlSize(.small)
         }
     }
 
@@ -132,47 +163,61 @@ public struct ServiceView: View {
     }
 
     private var devicesCard: some View {
-        SettingsCard(title: "Connected Devices", subtitle: "\(sessionManager.sessions.count) device\(sessionManager.sessions.count == 1 ? "" : "s") online", icon: "iphone.and.arrow.forward") {
+        let sessionCount = sessionManager.sessions.count
+        let subtitle = "\(sessionCount) device\(sessionCount == 1 ? "" : "s") online"
+        return SettingsCard(
+            title: "Connected Devices",
+            subtitle: subtitle,
+            icon: "iphone.and.arrow.forward"
+        ) {
             if sessionManager.sessions.isEmpty {
-                HStack(spacing: 10) {
-                    SettingsRowIcon("wifi.slash", tint: .secondary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("No devices connected")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.primary)
-                        Text("Open Control Center → Screen Mirroring on your iPhone.")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                }
-                .padding(.vertical, 6)
+                emptyDevicesRow
             } else {
                 ForEach(sessionManager.sessions) { session in
-                    HStack(spacing: 10) {
-                        SettingsRowIcon(session.device.connectionType.iconName, tint: .blue)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(session.device.name)
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(.primary)
-                            Text(session.device.connectionType.rawValue)
-                                .font(.system(size: 11))
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Circle()
-                            .fill(Color.green)
-                            .frame(width: 7, height: 7)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(Color.primary.opacity(0.03))
-                    )
+                    connectedDeviceRow(session)
                 }
             }
         }
+    }
+
+    private var emptyDevicesRow: some View {
+        HStack(spacing: 10) {
+            SettingsRowIcon("wifi.slash", tint: .secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("No devices connected")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.primary)
+                Text("Open Control Center → Screen Mirroring on your iPhone.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+        }
+        .padding(.vertical, 6)
+    }
+
+    private func connectedDeviceRow(_ session: MirrorSession) -> some View {
+        HStack(spacing: 10) {
+            SettingsRowIcon(session.device.connectionType.iconName, tint: .blue)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(session.device.name)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.primary)
+                Text(session.device.connectionType.rawValue)
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            Circle()
+                .fill(Color.green)
+                .frame(width: 7, height: 7)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.primary.opacity(0.03))
+        )
     }
 }
 

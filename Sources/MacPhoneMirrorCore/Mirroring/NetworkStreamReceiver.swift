@@ -7,9 +7,21 @@ import Network
 public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoDecoderDelegate, @unchecked Sendable {
     public static let shared = NetworkStreamReceiver()
 
-    public let mirroringStartedPublisher = PassthroughSubject<String, Never>()
-    public let sessionEndedPublisher = PassthroughSubject<Void, Never>()
-    public let orientationPublisher = PassthroughSubject<DeviceOrientation, Never>()
+    private let mirroringStartedSubject = PassthroughSubject<String, Never>()
+    private let sessionEndedSubject = PassthroughSubject<Void, Never>()
+    private let orientationSubject = PassthroughSubject<DeviceOrientation, Never>()
+
+    public var mirroringStartedPublisher: AnyPublisher<String, Never> {
+        mirroringStartedSubject.eraseToAnyPublisher()
+    }
+
+    public var sessionEndedPublisher: AnyPublisher<Void, Never> {
+        sessionEndedSubject.eraseToAnyPublisher()
+    }
+
+    public var orientationPublisher: AnyPublisher<DeviceOrientation, Never> {
+        orientationSubject.eraseToAnyPublisher()
+    }
 
     private let decoder = VideoDecoder()
     private let frameSubject = PassthroughSubject<VideoFrame, Never>()
@@ -49,7 +61,7 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
         decoder.delegate = self
         AirPlayMirrorServer.shared.configureVideoPipeline(delegate: self)
         AirPlayMirrorServer.shared.onStreamStarted = { [weak self] in
-            self?.mirroringStartedPublisher.send("iPhone")
+            self?.mirroringStartedSubject.send("iPhone")
         }
     }
 
@@ -84,7 +96,7 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
             return
         }
 
-        // After an explicit stop, give Bonjour a moment to drop the old record
+        // After an explicit stop, give Bonjour time to drop the old record
         // so iPhone Screen Mirroring rediscovers a fresh advertisement.
         let wasStopped: Bool = {
             lock.lock()
@@ -95,7 +107,7 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
             return false
         }()
         if wasStopped {
-            try await Task.sleep(nanoseconds: 250_000_000)
+            try await Task.sleep(nanoseconds: 600_000_000)
         }
 
         do {
@@ -127,55 +139,62 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
         )
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            let resumeOnce = ResumeOnce(continuation: continuation)
+            bindListener(listener, resumeOnce: ResumeOnce(continuation: continuation))
+        }
+    }
 
-            listener.stateUpdateHandler = { [weak self] state in
-                guard let self else { return }
+    private func bindListener(_ listener: NWListener, resumeOnce: ResumeOnce) {
+        listener.stateUpdateHandler = { [weak self] state in
+            self?.handleListenerState(state, listener: listener, resumeOnce: resumeOnce)
+        }
 
-                // Ignore callbacks from a superseded listener after stop()/restart().
-                lock.lock()
-                let isCurrent = self.listener === listener
-                lock.unlock()
-                guard isCurrent else {
-                    if case .cancelled = state {
-                        resumeOnce.fail(CancellationError())
-                    }
-                    return
-                }
+        listener.newConnectionHandler = { [weak self] connection in
+            self?.handleIncomingConnection(connection)
+        }
 
-                switch state {
-                case .ready:
-                    if let actualPort = listener.port?.rawValue {
-                        advertisedPort = actualPort
-                    }
-                    setState(.running)
-                    AppLogger.info(
-                        "AirPlay receiver advertising '\(AirPlayTXTRecordBuilder.serviceName)' on port \(advertisedPort)",
-                        category: .airplay
-                    )
-                    resumeOnce.complete()
-                case let .failed(error):
-                    setState(.failed(error.localizedDescription))
-                    AppLogger.error("AirPlay listener failed: \(error)", category: .airplay)
-                    resumeOnce.fail(error)
-                case .cancelled:
-                    setState(.stopped)
-                    resumeOnce.fail(CancellationError())
-                default:
-                    break
-                }
+        lock.lock()
+        self.listener?.cancel()
+        self.listener = listener
+        lock.unlock()
+
+        listener.start(queue: queue)
+    }
+
+    private func handleListenerState(
+        _ state: NWListener.State,
+        listener: NWListener,
+        resumeOnce: ResumeOnce
+    ) {
+        lock.lock()
+        let isCurrent = self.listener === listener
+        lock.unlock()
+        guard isCurrent else {
+            if case .cancelled = state {
+                resumeOnce.fail(CancellationError())
             }
+            return
+        }
 
-            listener.newConnectionHandler = { [weak self] connection in
-                self?.handleIncomingConnection(connection)
+        switch state {
+        case .ready:
+            if let actualPort = listener.port?.rawValue {
+                advertisedPort = actualPort
             }
-
-            self.lock.lock()
-            self.listener?.cancel()
-            self.listener = listener
-            self.lock.unlock()
-
-            listener.start(queue: self.queue)
+            setState(.running)
+            AppLogger.info(
+                "AirPlay receiver advertising '\(AirPlayTXTRecordBuilder.serviceName)' on port \(advertisedPort)",
+                category: .airplay
+            )
+            resumeOnce.complete()
+        case let .failed(error):
+            setState(.failed(error.localizedDescription))
+            AppLogger.error("AirPlay listener failed: \(error)", category: .airplay)
+            resumeOnce.fail(error)
+        case .cancelled:
+            setState(.stopped)
+            resumeOnce.fail(CancellationError())
+        default:
+            break
         }
     }
 
@@ -186,7 +205,7 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
         let handler = AirPlayConnectionHandler(connection: connection, identity: identity, queue: queue)
         handler.controlPort = advertisedPort
         handler.onMirroringStarted = { [weak self] deviceName in
-            self?.mirroringStartedPublisher.send(deviceName)
+            self?.mirroringStartedSubject.send(deviceName)
         }
         handler.onSessionEnded = { [weak self] in
             self?.handleConnectionEnded(connectionID)
@@ -210,7 +229,7 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
         guard removed, !hasActiveHandlers else { return }
 
         resetSessionState()
-        sessionEndedPublisher.send(())
+        sessionEndedSubject.send(())
     }
 
     public func endCurrentSession() {
@@ -238,6 +257,7 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
         }
         activeListener?.cancel()
         resetSessionState()
+        AirPlayMirrorServer.shared.shutdown()
         setState(.stopped)
         AppLogger.info("AirPlay receiver stopped", category: .airplay)
     }
@@ -253,7 +273,7 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
         AirPlayMirrorServer.shared.resetSession()
         AirPlaySessionContext.shared.deactivate()
         AirPlayMirrorServer.shared.onStreamStarted = { [weak self] in
-            self?.mirroringStartedPublisher.send("iPhone")
+            self?.mirroringStartedSubject.send("iPhone")
         }
         decoder.invalidateSession()
         frameCounter = 0
@@ -281,7 +301,7 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
                 "AirPlay device orientation → \(orientation.rawValue) (\(width)x\(height))",
                 category: .airplay
             )
-            orientationPublisher.send(orientation)
+            orientationSubject.send(orientation)
         }
 
         let frame = VideoFrame(

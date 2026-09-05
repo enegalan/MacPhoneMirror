@@ -80,23 +80,38 @@ public struct HardwareButtonsView: View {
 
     private func buttonPill(id: String, height: CGFloat, isLeft: Bool, isSapphire: Bool = false, action: @escaping () -> Void) -> some View {
         let isPressed = pressedButton == id
-        return Button(action: {
-            pressedButton = id
-            action()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                pressedButton = nil
+        return Button(
+            action: {
+                pressedButton = id
+                action()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                    pressedButton = nil
+                }
+            },
+            label: {
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(pillGradient(isSapphire: isSapphire))
+                    .frame(width: 4, height: height)
+                    .offset(x: isPressed ? (isLeft ? 2 : -2) : 0)
+                    .shadow(color: .black.opacity(0.3), radius: 1, x: isLeft ? -1 : 1, y: 0)
             }
-        }) {
-            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                .fill(
-                    isSapphire
-                        ? LinearGradient(colors: [Color(white: 0.3), Color(white: 0.15)], startPoint: .top, endPoint: .bottom)
-                        : LinearGradient(colors: [Color(white: 0.6), Color(white: 0.4)], startPoint: .top, endPoint: .bottom)
-                )
-                .frame(width: 4, height: height)
-                .offset(x: isPressed ? (isLeft ? 2 : -2) : 0)
-                .shadow(color: .black.opacity(0.3), radius: 1, x: isLeft ? -1 : 1, y: 0)
-        }
+        )
         .buttonStyle(.plain)
+    }
+
+    private func pillGradient(isSapphire: Bool) -> LinearGradient {
+        if isSapphire {
+            LinearGradient(
+                colors: [Color(white: 0.3), Color(white: 0.15)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        } else {
+            LinearGradient(
+                colors: [Color(white: 0.6), Color(white: 0.4)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
     }
 }

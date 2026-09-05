@@ -14,6 +14,9 @@ public final class VideoDecoder: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.macphonemirror.videodecoder", qos: .userInteractive)
     private var didLogFirstPixelBuffer = false
     private var decodeErrorCount = 0
+    private var inFlightFrames = 0
+    private let inFlightLock = NSLock()
+    private let maxInFlightLowLatency = 5
 
     public weak var delegate: VideoDecoderDelegate?
 
@@ -27,6 +30,9 @@ public final class VideoDecoder: @unchecked Sendable {
         formatDescription = formatDesc
         didLogFirstPixelBuffer = false
         decodeErrorCount = 0
+        inFlightLock.lock()
+        inFlightFrames = 0
+        inFlightLock.unlock()
         invalidateSession()
 
         let destinationPixelBufferAttributes: [String: Any] = [
@@ -37,9 +43,11 @@ public final class VideoDecoder: @unchecked Sendable {
         ]
 
         var outputCallback = VTDecompressionOutputCallbackRecord(
+            // swiftlint:disable:next line_length
             decompressionOutputCallback: { decompressionOutputRefCon, _, status, _, imageBuffer, presentationTimeStamp, _ in
                 guard let refCon = decompressionOutputRefCon else { return }
                 let decoder = Unmanaged<VideoDecoder>.fromOpaque(refCon).takeUnretainedValue()
+                decoder.noteFrameCompleted()
                 guard status == noErr, let imageBuffer else {
                     if status != noErr {
                         decoder.noteDecodeError(status)
@@ -51,11 +59,16 @@ public final class VideoDecoder: @unchecked Sendable {
             decompressionOutputRefCon: Unmanaged.passUnretained(self).toOpaque()
         )
 
+        let preferHardware = AppPreferences.enableHardwareDecode
+        let decoderSpecification: [String: Any] = [
+            kVTVideoDecoderSpecification_EnableHardwareAcceleratedVideoDecoder as String: preferHardware,
+        ]
+
         var session: VTDecompressionSession?
         let status = VTDecompressionSessionCreate(
             allocator: kCFAllocatorDefault,
             formatDescription: formatDesc,
-            decoderSpecification: nil,
+            decoderSpecification: decoderSpecification as CFDictionary,
             imageBufferAttributes: destinationPixelBufferAttributes as CFDictionary,
             outputCallback: &outputCallback,
             decompressionSessionOut: &session
@@ -66,16 +79,17 @@ public final class VideoDecoder: @unchecked Sendable {
             return false
         }
 
-        // Enable hardware real-time mode
         VTSessionSetProperty(validSession, key: kVTDecompressionPropertyKey_RealTime, value: kCFBooleanTrue)
         decompressionSession = validSession
-        AppLogger.info("VTDecompressionSession created with hardware acceleration", category: .video)
+        AppLogger.info(
+            "VTDecompressionSession created (hardwarePrefer=\(preferHardware))",
+            category: .video
+        )
         return true
     }
 
     public func decode(sampleBuffer: CMSampleBuffer) {
         guard let session = decompressionSession else {
-            // If format description changed or not initialized, attempt setup
             if let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer) {
                 if configure(with: formatDesc) {
                     decode(sampleBuffer: sampleBuffer)
@@ -84,9 +98,19 @@ public final class VideoDecoder: @unchecked Sendable {
             return
         }
 
-        var flagsOut: VTDecodeInfoFlags = []
-        let decodeFlags: VTDecodeFrameFlags = [._EnableAsynchronousDecompression, ._1xRealTimePlayback]
+        let lowLatency = AppPreferences.lowLatencyMode
+        if lowLatency, currentInFlight() >= maxInFlightLowLatency {
+            PerformanceMonitor.shared.recordDroppedFrame()
+            return
+        }
 
+        var flagsOut: VTDecodeInfoFlags = []
+        var decodeFlags: VTDecodeFrameFlags = [._EnableAsynchronousDecompression]
+        if !lowLatency {
+            decodeFlags.insert(._1xRealTimePlayback)
+        }
+
+        noteFrameStarted()
         let start = CFAbsoluteTimeGetCurrent()
         let status = VTDecompressionSessionDecodeFrame(
             session,
@@ -97,6 +121,7 @@ public final class VideoDecoder: @unchecked Sendable {
         )
 
         if status != noErr {
+            noteFrameCompleted()
             AppLogger.warning("VTDecompressionSessionDecodeFrame status: \(status)", category: .airplay)
             PerformanceMonitor.shared.recordDroppedFrame()
         } else {
@@ -117,9 +142,27 @@ public final class VideoDecoder: @unchecked Sendable {
 
     fileprivate func noteDecodeError(_ status: OSStatus) {
         decodeErrorCount += 1
-        if decodeErrorCount == 1 || decodeErrorCount % 120 == 0 {
+        if decodeErrorCount == 1 || decodeErrorCount.isMultiple(of: 120) {
             AppLogger.warning("VT decode callback status: \(status) (count=\(decodeErrorCount))", category: .airplay)
         }
+    }
+
+    private func noteFrameStarted() {
+        inFlightLock.lock()
+        inFlightFrames += 1
+        inFlightLock.unlock()
+    }
+
+    fileprivate func noteFrameCompleted() {
+        inFlightLock.lock()
+        inFlightFrames = max(0, inFlightFrames - 1)
+        inFlightLock.unlock()
+    }
+
+    private func currentInFlight() -> Int {
+        inFlightLock.lock()
+        defer { inFlightLock.unlock() }
+        return inFlightFrames
     }
 
     public func invalidateSession() {

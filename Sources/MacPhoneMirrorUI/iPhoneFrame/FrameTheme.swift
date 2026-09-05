@@ -1,11 +1,17 @@
 import MacPhoneMirrorCore
 import SwiftUI
 
+public struct FrameThemeColors {
+    public let outerBorder: Color
+    public let innerBezel: Color
+    public let metalGradient: Gradient
+}
+
 public enum FrameTheme {
-    public static func colors(for finish: FrameFinish) -> (outerBorder: Color, innerBezel: Color, metalGradient: Gradient) {
+    public static func colors(for finish: FrameFinish) -> FrameThemeColors {
         switch finish {
         case .naturalTitanium:
-            (
+            FrameThemeColors(
                 outerBorder: Color(red: 0.65, green: 0.63, blue: 0.60),
                 innerBezel: Color(red: 0.12, green: 0.12, blue: 0.12),
                 metalGradient: Gradient(colors: [
@@ -15,7 +21,7 @@ public enum FrameTheme {
                 ])
             )
         case .blackTitanium, .midnight, .spaceGray:
-            (
+            FrameThemeColors(
                 outerBorder: Color(red: 0.22, green: 0.22, blue: 0.24),
                 innerBezel: Color(red: 0.08, green: 0.08, blue: 0.08),
                 metalGradient: Gradient(colors: [
@@ -25,7 +31,7 @@ public enum FrameTheme {
                 ])
             )
         case .whiteTitanium, .silver, .starlight:
-            (
+            FrameThemeColors(
                 outerBorder: Color(red: 0.88, green: 0.88, blue: 0.90),
                 innerBezel: Color(red: 0.10, green: 0.10, blue: 0.10),
                 metalGradient: Gradient(colors: [
@@ -35,7 +41,7 @@ public enum FrameTheme {
                 ])
             )
         case .desertTitanium, .gold:
-            (
+            FrameThemeColors(
                 outerBorder: Color(red: 0.78, green: 0.70, blue: 0.62),
                 innerBezel: Color(red: 0.10, green: 0.09, blue: 0.08),
                 metalGradient: Gradient(colors: [
@@ -45,7 +51,7 @@ public enum FrameTheme {
                 ])
             )
         case .deepPurple:
-            (
+            FrameThemeColors(
                 outerBorder: Color(red: 0.40, green: 0.35, blue: 0.48),
                 innerBezel: Color(red: 0.08, green: 0.07, blue: 0.10),
                 metalGradient: Gradient(colors: [

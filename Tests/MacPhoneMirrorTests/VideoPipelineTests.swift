@@ -31,7 +31,14 @@ struct VideoPipelineTests {
         let attrs: [String: Any] = [
             kCVPixelBufferMetalCompatibilityKey as String: true,
         ]
-        CVPixelBufferCreate(kCFAllocatorDefault, 100, 200, kCVPixelFormatType_32BGRA, attrs as CFDictionary, &pixelBuffer)
+        CVPixelBufferCreate(
+            kCFAllocatorDefault,
+            100,
+            200,
+            kCVPixelFormatType_32BGRA,
+            attrs as CFDictionary,
+            &pixelBuffer
+        )
 
         #expect(pixelBuffer != nil)
         if let buffer = pixelBuffer {

@@ -39,7 +39,10 @@ public final class BluetoothDiscovery: NSObject, DeviceDiscovery, CBCentralManag
         if centralManager == nil {
             centralManager = CBCentralManager(delegate: self, queue: .main)
         } else if centralManager?.state == .poweredOn {
-            centralManager?.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
+            centralManager?.scanForPeripherals(
+                withServices: nil,
+                options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
+            )
         }
         AppLogger.info("Bluetooth discovery started", category: .bluetooth)
     }
@@ -57,7 +60,10 @@ public final class BluetoothDiscovery: NSObject, DeviceDiscovery, CBCentralManag
 
     public func centralManagerDidUpdateState(_ central: CBCentralManager) {
         if central.state == .poweredOn, isScanning {
-            central.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
+            central.scanForPeripherals(
+                withServices: nil,
+                options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
+            )
         }
     }
 
@@ -70,8 +76,8 @@ public final class BluetoothDiscovery: NSObject, DeviceDiscovery, CBCentralManag
             lock.unlock()
 
             let phone = PhoneDevice(
-                id: peripheral.identifier.uuidString,
                 name: name,
+                id: peripheral.identifier.uuidString,
                 model: .iPhone16Pro,
                 connectionType: .bluetooth,
                 isAvailable: true,

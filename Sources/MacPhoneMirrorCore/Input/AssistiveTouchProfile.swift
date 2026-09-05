@@ -25,7 +25,7 @@ public struct AssistiveTouchProfile: Sendable {
             title: "Home",
             systemImage: "house.fill",
             event: .homeButton,
-            shortcutHint: "⌘H",
+            shortcutHint: "⌘⇧H",
             description: "Return to iOS Home Screen"
         ),
         AssistiveTouchAction(
@@ -33,7 +33,7 @@ public struct AssistiveTouchProfile: Sendable {
             title: "App Switcher",
             systemImage: "square.2.layers.3d",
             event: .appSwitcher,
-            shortcutHint: "⌘Tab",
+            shortcutHint: "⌘⇧Tab",
             description: "Show running apps in multitasking view"
         ),
         AssistiveTouchAction(
@@ -41,7 +41,7 @@ public struct AssistiveTouchProfile: Sendable {
             title: "Control Center",
             systemImage: "switch.2",
             event: .controlCenter,
-            shortcutHint: "^⌥C",
+            shortcutHint: "⌘⇧C",
             description: "Open iOS Control Center toggles"
         ),
         AssistiveTouchAction(
@@ -49,7 +49,7 @@ public struct AssistiveTouchProfile: Sendable {
             title: "Notifications",
             systemImage: "bell.fill",
             event: .notificationCenter,
-            shortcutHint: "^⌥N",
+            shortcutHint: "⌘⇧N",
             description: "Pull down iOS Notification Center"
         ),
         AssistiveTouchAction(
@@ -57,7 +57,7 @@ public struct AssistiveTouchProfile: Sendable {
             title: "Lock Screen",
             systemImage: "lock.fill",
             event: .lockScreen,
-            shortcutHint: "Esc",
+            shortcutHint: "⌘⇧L",
             description: "Lock or wake the iPhone"
         ),
         AssistiveTouchAction(
@@ -65,7 +65,7 @@ public struct AssistiveTouchProfile: Sendable {
             title: "Siri",
             systemImage: "waveform.badge.magnifyingglass",
             event: .siri,
-            shortcutHint: "⌥Space",
+            shortcutHint: "⌘⇧S",
             description: "Activate Siri voice assistant"
         ),
         AssistiveTouchAction(
@@ -73,7 +73,7 @@ public struct AssistiveTouchProfile: Sendable {
             title: "Volume Up",
             systemImage: "speaker.wave.3.fill",
             event: .volumeUp,
-            shortcutHint: "F12",
+            shortcutHint: "⌘↑",
             description: "Increase iOS audio volume"
         ),
         AssistiveTouchAction(
@@ -81,7 +81,7 @@ public struct AssistiveTouchProfile: Sendable {
             title: "Volume Down",
             systemImage: "speaker.wave.1.fill",
             event: .volumeDown,
-            shortcutHint: "F11",
+            shortcutHint: "⌘↓",
             description: "Decrease iOS audio volume"
         ),
     ]

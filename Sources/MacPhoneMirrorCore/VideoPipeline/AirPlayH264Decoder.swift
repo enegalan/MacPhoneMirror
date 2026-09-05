@@ -92,7 +92,9 @@ final class AirPlayH264Decoder: @unchecked Sendable {
         let bytes = [UInt8](payload)
         let spsSize = Int(bytes[6]) << 8 | Int(bytes[7])
         guard spsSize > 0, spsSize + 11 + 2 <= bytes.count else {
-            let preview = payload.prefix(min(payload.count, 12)).map { String(format: "%02x", $0) }.joined(separator: " ")
+            let preview = payload.prefix(min(payload.count, 12))
+                .map { String(format: "%02x", $0) }
+                .joined(separator: " ")
             AppLogger.warning("AirPlay SPS/PPS invalid SPS size \(spsSize), header=\(preview)", category: .airplay)
             return
         }

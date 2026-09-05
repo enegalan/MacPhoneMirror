@@ -33,7 +33,7 @@ public struct PhoneFrameView<ScreenContent: View>: View {
         )
     }
 
-    private var theme: (outerBorder: Color, innerBezel: Color, metalGradient: Gradient) {
+    private var theme: FrameThemeColors {
         FrameTheme.colors(for: style.finish)
     }
 
@@ -75,27 +75,7 @@ public struct PhoneFrameView<ScreenContent: View>: View {
         let outerSize = CGSize(width: chassisSize.width + 16, height: chassisSize.height + 16)
 
         return ZStack {
-            if style.showHardwareButtons, orientation.isPortrait {
-                HardwareButtonsView(
-                    frameHeight: chassisSize.height + 16,
-                    onActionButton: {
-                        Task { try? await SessionManager.shared.sendInputEvent(.siri, sessionID: sessionID) }
-                    },
-                    onVolumeUp: {
-                        Task { try? await SessionManager.shared.sendInputEvent(.volumeUp, sessionID: sessionID) }
-                    },
-                    onVolumeDown: {
-                        Task { try? await SessionManager.shared.sendInputEvent(.volumeDown, sessionID: sessionID) }
-                    },
-                    onPower: {
-                        Task { try? await SessionManager.shared.sendInputEvent(.lockScreen, sessionID: sessionID) }
-                    },
-                    onCameraControl: {
-                        AppLogger.info("Camera control triggered", category: .input)
-                    }
-                )
-                .frame(width: outerSize.width, height: outerSize.height)
-            }
+            hardwareButtonsLayer(outerSize: outerSize)
 
             RoundedRectangle(cornerRadius: model.outerCornerRadius + 2, style: .continuous)
                 .fill(LinearGradient(gradient: theme.metalGradient, startPoint: .topLeading, endPoint: .bottomTrailing))
@@ -113,5 +93,30 @@ public struct PhoneFrameView<ScreenContent: View>: View {
         }
         .frame(width: outerSize.width, height: outerSize.height)
         .shadow(color: style.showShadow ? Color.black.opacity(0.45) : .clear, radius: 36, x: 0, y: 18)
+    }
+
+    @ViewBuilder
+    private func hardwareButtonsLayer(outerSize: CGSize) -> some View {
+        if style.showHardwareButtons, orientation.isPortrait {
+            HardwareButtonsView(
+                frameHeight: chassisSize.height + 16,
+                onActionButton: {
+                    Task { try? await SessionManager.shared.sendInputEvent(.siri, sessionID: sessionID) }
+                },
+                onVolumeUp: {
+                    Task { try? await SessionManager.shared.sendInputEvent(.volumeUp, sessionID: sessionID) }
+                },
+                onVolumeDown: {
+                    Task { try? await SessionManager.shared.sendInputEvent(.volumeDown, sessionID: sessionID) }
+                },
+                onPower: {
+                    Task { try? await SessionManager.shared.sendInputEvent(.lockScreen, sessionID: sessionID) }
+                },
+                onCameraControl: {
+                    AppLogger.info("Camera control triggered", category: .input)
+                }
+            )
+            .frame(width: outerSize.width, height: outerSize.height)
+        }
     }
 }

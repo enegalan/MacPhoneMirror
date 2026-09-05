@@ -6,8 +6,8 @@ public struct MirrorSessionWindow: View {
     public let sessionID: String
 
     @ObservedObject private var sessionManager = SessionManager.shared
+    @ObservedObject private var frameStyleStore = FrameStyleStore.shared
     @Environment(\.dismissWindow) private var dismissWindow
-    @State private var frameStyle = FrameRenderStyle.standard
 
     public init(sessionID: String) {
         self.sessionID = sessionID
@@ -15,12 +15,12 @@ public struct MirrorSessionWindow: View {
 
     public var body: some View {
         Group {
-            if let session = sessionManager.session(id: sessionID) ?? sessionManager.sessions.first(where: { $0.id == sessionID }) {
+            if let session = resolvedSession {
                 MirrorViewportView(
                     sessionID: session.id,
                     device: session.device,
                     orientation: session.orientation,
-                    style: frameStyle
+                    style: frameStyleStore.style
                 )
             } else {
                 VStack(spacing: 12) {
@@ -49,10 +49,13 @@ public struct MirrorSessionWindow: View {
         }
     }
 
+    private var resolvedSession: MirrorSession? {
+        sessionManager.session(id: sessionID)
+            ?? sessionManager.sessions.first { $0.id == sessionID }
+    }
+
     private var windowTitle: String {
-        sessionManager.session(id: sessionID)?.device.name
-            ?? sessionManager.sessions.first(where: { $0.id == sessionID })?.device.name
-            ?? "iPhone"
+        resolvedSession?.device.name ?? "iPhone"
     }
 }
 

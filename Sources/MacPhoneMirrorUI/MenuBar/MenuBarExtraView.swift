@@ -81,36 +81,9 @@ public struct MenuBarExtraView: View {
 
     private var serviceToggleRow: some View {
         HStack(spacing: 10) {
-            ZStack {
-                Circle()
-                    .fill(serviceIconColor.opacity(serviceIconBackgroundOpacity))
-                    .frame(width: 36, height: 36)
-                Image(systemName: "antenna.radiowaves.left.and.right")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(serviceIconColor)
-                    .opacity(isPulsing ? 0.35 : 1.0)
-                    .animation(isPulsing ? .easeInOut(duration: 1.2).repeatForever(autoreverses: true) : .default, value: isPulsing)
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(AirPlayTXTRecordBuilder.serviceName)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-
-                HStack(spacing: 5) {
-                    Circle()
-                        .fill(statusDotColor)
-                        .frame(width: 6, height: 6)
-                    Text(serviceStatusText)
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                }
-            }
-
+            serviceStatusIcon
+            serviceStatusLabels
             Spacer(minLength: 8)
-
             Toggle(
                 "AirPlay service",
                 isOn: Binding(
@@ -121,6 +94,42 @@ public struct MenuBarExtraView: View {
             .toggleStyle(.switch)
             .labelsHidden()
             .controlSize(.small)
+        }
+    }
+
+    private var serviceStatusIcon: some View {
+        ZStack {
+            Circle()
+                .fill(serviceIconColor.opacity(serviceIconBackgroundOpacity))
+                .frame(width: 36, height: 36)
+            Image(systemName: "antenna.radiowaves.left.and.right")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(serviceIconColor)
+                .opacity(isPulsing ? 0.35 : 1.0)
+                .animation(pulseAnimation, value: isPulsing)
+        }
+    }
+
+    private var pulseAnimation: Animation {
+        isPulsing ? .easeInOut(duration: 1.2).repeatForever(autoreverses: true) : .default
+    }
+
+    private var serviceStatusLabels: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(AirPlayTXTRecordBuilder.serviceName)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.primary)
+                .lineLimit(1)
+
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(statusDotColor)
+                    .frame(width: 6, height: 6)
+                Text(serviceStatusText)
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
         }
     }
 
@@ -173,7 +182,9 @@ public struct MenuBarExtraView: View {
 
     private func openMainWindow() {
         NSApp.activate(ignoringOtherApps: true)
-        if let window = NSApp.windows.first(where: { $0.identifier?.rawValue.starts(with: MirrorWindowID.main) == true && $0.isVisible && !($0 is NSPanel) }) {
+        if let window = visibleWindow(where: { identifier in
+            identifier.starts(with: MirrorWindowID.main)
+        }) {
             window.makeKeyAndOrderFront(NSApp)
         } else {
             openWindow(id: MirrorWindowID.main)
@@ -183,12 +194,21 @@ public struct MenuBarExtraView: View {
 
     private func focusSession(_ session: MirrorSession) {
         NSApp.activate(ignoringOtherApps: true)
-        if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "mirror-session-\(session.id)" && $0.isVisible && !($0 is NSPanel) }) {
+        if let window = visibleWindow(where: { identifier in
+            identifier == "mirror-session-\(session.id)"
+        }) {
             window.makeKeyAndOrderFront(NSApp)
         } else {
             openWindow(id: MirrorWindowID.session, value: session.id)
         }
         dismiss()
+    }
+
+    private func visibleWindow(where match: (String) -> Bool) -> NSWindow? {
+        NSApp.windows.first { window in
+            guard let identifier = window.identifier?.rawValue else { return false }
+            return match(identifier) && window.isVisible && !(window is NSPanel)
+        }
     }
 }
 

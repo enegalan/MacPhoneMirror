@@ -2,6 +2,7 @@ import Darwin
 import Foundation
 import Network
 
+// swiftlint:disable file_length
 final class AirPlayMirrorServer: @unchecked Sendable {
     static let shared = AirPlayMirrorServer()
 
@@ -37,6 +38,28 @@ final class AirPlayMirrorServer: @unchecked Sendable {
         queue.sync {
             startListenerIfNeeded()
             return listeningPort
+        }
+    }
+
+    /// Tears down the TCP accept socket and any active mirror stream.
+    func shutdown() {
+        queue.sync {
+            acceptSource?.cancel()
+            acceptSource = nil
+            if listenFD >= 0 {
+                close(listenFD)
+                listenFD = -1
+            }
+            listeningPort = 0
+            isRunning = false
+
+            let session = activeSession
+            activeSession = nil
+            session?.stop()
+            AppLogger.info("AirPlay mirror server shut down", category: .airplay)
+        }
+        sessionQueue.async { [weak self] in
+            self?.h264Decoder.reset()
         }
     }
 
@@ -288,7 +311,9 @@ private final class MirrorStreamSession: @unchecked Sendable {
             if received > 0 {
                 hasReceivedData = true
                 if buffer.isEmpty, packetCount == 0 {
-                    let preview = chunk.prefix(min(received, 24)).map { String(format: "%02x", $0) }.joined(separator: " ")
+                    let preview = chunk.prefix(min(received, 24))
+                        .map { String(format: "%02x", $0) }
+                        .joined(separator: " ")
                     AppLogger.info("Mirror stream first bytes (\(received)B): \(preview)", category: .airplay)
                 }
                 buffer.append(contentsOf: chunk.prefix(received))
@@ -320,6 +345,7 @@ private final class MirrorStreamSession: @unchecked Sendable {
         }
     }
 
+    // swiftlint:disable:next cyclomatic_complexity
     private func processBuffer() {
         while true {
             switch mode {
@@ -490,8 +516,11 @@ private final class MirrorStreamSession: @unchecked Sendable {
     private func respondStreamXML() {
         let config = StreamConfiguration.shared
         let size = config.quality.advertisedSize
+        let pixelSize = config.quality.advertisedPixelSize
         let height = Int(size.height)
         let width = Int(size.width)
+        let heightPixels = Int(pixelSize.height)
+        let widthPixels = Int(pixelSize.width)
         let refreshInterval = 1.0 / Double(config.quality.maxFPS)
         let xml = """
         <?xml version="1.0" encoding="UTF-8"?>
@@ -500,6 +529,8 @@ private final class MirrorStreamSession: @unchecked Sendable {
         <dict>
           <key>height</key><integer>\(height)</integer>
           <key>width</key><integer>\(width)</integer>
+          <key>heightPixels</key><integer>\(heightPixels)</integer>
+          <key>widthPixels</key><integer>\(widthPixels)</integer>
           <key>overscanned</key><false/>
           <key>refreshRate</key><real>\(refreshInterval)</real>
           <key>version</key><string>366.0</string>
