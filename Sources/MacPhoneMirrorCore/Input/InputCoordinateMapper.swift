@@ -1,12 +1,18 @@
 import CoreGraphics
 import Foundation
 
+// Maps Mac viewport clicks into normalized phone coordinates, accounting for letterboxing.
+// Returns nil outside the active screen so bezel clicks do not inject phantom touches.
+
 public protocol InputCoordinateMapper: Sendable {
+    /// Maps a viewport click to normalized phone coords; nil outside the active screen area.
     func map(point: CGPoint, in viewportSize: CGSize, device: PhoneDevice, orientation: DeviceOrientation) -> CGPoint?
+    /// Maps a viewport click to native pixel coords; nil outside the active screen area.
     func mapToNativeResolution(point: CGPoint, in viewportSize: CGSize, device: PhoneDevice, orientation: DeviceOrientation) -> CGPoint?
 }
 
 public struct StandardCoordinateMapper: InputCoordinateMapper {
+    /// Creates the default letterbox-aware coordinate mapper.
     public init() {}
 
     /// Maps a point from the macOS view coordinate space to normalized iPhone coordinates `(0.0...1.0, 0.0...1.0)`.

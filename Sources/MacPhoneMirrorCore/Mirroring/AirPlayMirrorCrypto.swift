@@ -2,7 +2,11 @@ import CommonCrypto
 import CryptoKit
 import Foundation
 
+// Derives per-stream AES key/IV and decrypts the H.264 mirror TCP payload.
+// Stream keys depend on streamConnectionID from RTSP SETUP — must stay in sync with the phone.
+
 enum AirPlayMirrorCrypto {
+    /// Derives per-stream AES-CTR key/IV from FairPlay audio key + streamConnectionID.
     static func deriveMirrorKeys(streamConnectionID: UInt64, audioAESKey: Data) -> (key: Data, iv: Data) {
         let keySeed = "AirPlayStreamKey\(streamConnectionID)"
         let ivSeed = "AirPlayStreamIV\(streamConnectionID)"
@@ -18,6 +22,7 @@ final class AirPlayMirrorDecryptor: @unchecked Sendable {
     private var nextDecryptCount = 0
     private var overflow = [UInt8](repeating: 0, count: 16)
 
+    /// Configures AES-CTR from SETUP stream keys; resets any prior cryptor state.
     func configure(streamConnectionID: UInt64, audioAESKey: Data) {
         reset()
         let material = AirPlayMirrorCrypto.deriveMirrorKeys(
@@ -48,6 +53,8 @@ final class AirPlayMirrorDecryptor: @unchecked Sendable {
         overflow = [UInt8](repeating: 0, count: 16)
     }
 
+    /// Decrypts one mirror TCP payload in streaming AES-CTR order (must not skip packets).
+    /// Returns `input` unchanged when unconfigured or on cryptor failure.
     func decrypt(_ input: Data) -> Data {
         guard let cryptor, !input.isEmpty else { return input }
 
@@ -106,6 +113,7 @@ final class AirPlayMirrorDecryptor: @unchecked Sendable {
         return Data(output)
     }
 
+    /// Releases the AES-CTR cryptor and clears partial-block overflow state.
     func reset() {
         if let cryptor {
             CCCryptorRelease(cryptor)
@@ -120,6 +128,7 @@ final class AirPlayMirrorDecryptor: @unchecked Sendable {
         reset()
     }
 
+    /// Advances CTR to the next 16-byte boundary after a partial consume.
     private func alignToNextBlock(_ cryptor: CCCryptorRef) {
         guard blockOffset != 0 else { return }
         var waste = [UInt8](repeating: 0, count: 16 - blockOffset)

@@ -2,12 +2,15 @@ import AppKit
 import MacPhoneMirrorCore
 import SwiftUI
 
+// Menu bar dropdown: service toggle, session shortcuts, open main window.
+
 public struct MenuBarExtraView: View {
     @ObservedObject private var sessionManager = SessionManager.shared
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismiss) private var dismiss
     @State private var isPulsing = false
 
+    /// Creates the menu-bar dropdown bound to the shared session manager.
     public init() {}
 
     public var body: some View {
@@ -43,6 +46,7 @@ public struct MenuBarExtraView: View {
         .onAppear { updatePulse() }
     }
 
+    /// Updates the waiting-for-connection pulse based on service and session state.
     private func updatePulse() {
         let shouldPulse = sessionManager.isServiceEnabled
             && sessionManager.sessions.isEmpty
@@ -180,6 +184,7 @@ public struct MenuBarExtraView: View {
         return .orange
     }
 
+    /// Brings the main app window forward, opening it if needed.
     private func openMainWindow() {
         NSApp.activate(ignoringOtherApps: true)
         if let window = visibleWindow(where: { identifier in
@@ -192,6 +197,7 @@ public struct MenuBarExtraView: View {
         dismiss()
     }
 
+    /// Focuses an existing mirror session window or opens a new one.
     private func focusSession(_ session: MirrorSession) {
         NSApp.activate(ignoringOtherApps: true)
         if let window = visibleWindow(where: { identifier in
@@ -204,6 +210,7 @@ public struct MenuBarExtraView: View {
         dismiss()
     }
 
+    /// Finds the first visible non-panel window whose identifier matches the predicate.
     private func visibleWindow(where match: (String) -> Bool) -> NSWindow? {
         NSApp.windows.first { window in
             guard let identifier = window.identifier?.rawValue else { return false }

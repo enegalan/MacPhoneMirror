@@ -1,5 +1,8 @@
 import Foundation
 
+// Persisted AirPlay quality presets (resolution/FPS/bitrate hints).
+// Negotiated with the iPhone on the next session establishment, not mid-stream.
+
 public enum StreamQuality: String, CaseIterable, Identifiable, Codable, Sendable {
     case ultra
     case high
@@ -62,7 +65,7 @@ public enum StreamQuality: String, CaseIterable, Identifiable, Codable, Sendable
 public final class StreamConfiguration: @unchecked Sendable {
     public static let shared = StreamConfiguration()
 
-    private static let qualityKey = "streamQuality"
+    private static let qualityKey = AppPreferences.Key.streamQuality
 
     public var quality: StreamQuality {
         get {
@@ -76,5 +79,6 @@ public final class StreamConfiguration: @unchecked Sendable {
         }
     }
 
+    /// Singleton; quality is read/written via UserDefaults, not in-memory state.
     private init() {}
 }

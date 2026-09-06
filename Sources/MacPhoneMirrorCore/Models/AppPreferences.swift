@@ -1,6 +1,8 @@
 import Foundation
 
-/// Typed UserDefaults keys shared by Settings/Control UI and Core readers.
+// Typed UserDefaults accessors shared by Settings UI and Core readers.
+// Centralizes key strings so Core never depends on SwiftUI settings views.
+
 public enum AppPreferences {
     public enum Key {
         public static let enableHardwareDecode = "enableHardwareDecode"
@@ -9,6 +11,9 @@ public enum AppPreferences {
         public static let enableMouseControl = "control.enableMouseControl"
         public static let showTouchRipples = "control.showTouchRipples"
         public static let mouseSensitivity = "control.mouseSensitivity"
+        public static let streamQuality = "streamQuality"
+        public static let airPlayServiceEnabled = "airplay.serviceEnabled"
+        public static let enableAudioPlayback = "airplay.enableAudioPlayback"
     }
 
     public static var enableHardwareDecode: Bool {
@@ -51,5 +56,10 @@ public enum AppPreferences {
                 UserDefaults.standard.set(data, forKey: Key.frameStyle)
             }
         }
+    }
+
+    public static var enableAudioPlayback: Bool {
+        get { UserDefaults.standard.object(forKey: Key.enableAudioPlayback) as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: Key.enableAudioPlayback) }
     }
 }

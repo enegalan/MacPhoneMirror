@@ -1,15 +1,18 @@
 import CoreBluetooth
 import Foundation
 
-// swiftlint:disable file_length
+/// Bluetooth HID peripheral that the iPhone pairs as an AssistiveTouch pointer.
+/// AirPlay carries video only; pointer/keyboard control needs this separate HID channel.
 // swiftlint:disable:next type_body_length
 public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchecked Sendable {
     public static let shared = BluetoothHIDTransport()
 
+    /// True when we are advertising or an iPhone has subscribed to HID notifies.
+    /// Does not guarantee AssistiveTouch is enabled on the phone — only that the Mac side is usable.
     public var isConnected: Bool {
         lock.lock()
         defer { lock.unlock() }
-        return _isAdvertising || !_subscribedCentrals.isEmpty
+        return isAdvertisingActive || !subscribedCentralIDs.isEmpty
     }
 
     public var transportName: String {
@@ -19,52 +22,54 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
     public var hasSubscribers: Bool {
         lock.lock()
         defer { lock.unlock() }
-        return !_subscribedCentrals.isEmpty
+        return !subscribedCentralIDs.isEmpty
     }
 
-    private var peripheralManager: CBPeripheralManager?
-    private var mouseReportChar: CBMutableCharacteristic?
-    private var keyboardReportChar: CBMutableCharacteristic?
-    private var consumerReportChar: CBMutableCharacteristic?
-    private var bootMouseChar: CBMutableCharacteristic?
-    private var bootKeyboardChar: CBMutableCharacteristic?
-    private var batteryLevelChar: CBMutableCharacteristic?
+    var peripheralManager: CBPeripheralManager?
+    var mouseReportChar: CBMutableCharacteristic?
+    var keyboardReportChar: CBMutableCharacteristic?
+    var consumerReportChar: CBMutableCharacteristic?
+    var bootMouseChar: CBMutableCharacteristic?
+    var bootKeyboardChar: CBMutableCharacteristic?
+    var batteryLevelChar: CBMutableCharacteristic?
 
-    private var _isAdvertising = false
-    private var _wantsAdvertising = false
-    private var _servicesInstalled = false
-    private var _servicesInstalling = false
-    private var activeButtons: UInt8 = 0
-    private var readyToNotify = true
-    private var pendingNotifyQueues: [ObjectIdentifier: [Data]] = [:]
-    private var pendingNotifyCharacteristics: [ObjectIdentifier: CBMutableCharacteristic] = [:]
-    private var subscribedCentrals: [UUID: CBCentral] = [:]
-    private var _subscribedCentrals: Set<UUID> = []
-    private var cachedMouse = Data([0, 0, 0, 0, 0, 0])
-    private var cachedKeyboard = Data([0, 0, 0, 0, 0, 0, 0, 0])
-    private var cachedConsumer = Data([0, 0])
-    private var lastAbsX: UInt16 = 0
-    private var lastAbsY: UInt16 = 0
-    /// Relative pointer deltas → absolute axis steps (HID units per “point”).
-    private let baseRelativeMoveScale: Double = 48
+    var isAdvertisingActive = false
+    var wantsAdvertising = false
+    var servicesInstalled = false
+    var servicesInstalling = false
+    var activeButtons: UInt8 = 0
+    var readyToNotify = true
+    var pendingNotifyQueues: [ObjectIdentifier: [Data]] = [:]
+    var pendingNotifyCharacteristics: [ObjectIdentifier: CBMutableCharacteristic] = [:]
+    var subscribedCentrals: [UUID: CBCentral] = [:]
+    var subscribedCharacteristicIDs: [UUID: Set<CBUUID>] = [:]
+    var subscribedCentralIDs: Set<UUID> = []
+    var cachedMouse = Data([0, 0, 0, 0, 0, 0])
+    var cachedKeyboard = Data([0, 0, 0, 0, 0, 0, 0, 0])
+    var cachedConsumer = Data([0, 0])
+    var lastAbsX: UInt16 = 0
+    var lastAbsY: UInt16 = 0
+    let baseRelativeMoveScale: Double = 48
 
-    private var relativeMoveScale: Double {
+    var relativeMoveScale: Double {
         baseRelativeMoveScale * AppPreferences.mouseSensitivity
     }
 
-    private let lock = NSLock()
-    private var connectWaiters: [CheckedContinuation<Void, Error>] = []
-    private let queue = DispatchQueue(label: "com.macphonemirror.hid", qos: .userInitiated)
+    let lock = NSLock()
+    var connectWaiters: [CheckedContinuation<Void, Error>] = []
+    let queue = DispatchQueue(label: "com.macphonemirror.hid", qos: .userInitiated)
 
+    /// Creates the shared-capable HID transport; advertising starts only via `connect()`.
     override public init() {
         super.init()
     }
 
+    /// Starts HID advertising (or reuses an active one), racing against a connect timeout.
     public func connect() async throws {
         try await withThrowingTaskGroup(of: Void.self) { group in
             group.addTask { try await self.connectOnce() }
             group.addTask {
-                try await Task.sleep(nanoseconds: 15_000_000_000)
+                try await Task.sleep(nanoseconds: HIDTiming.connectWaitNs)
                 let timeout = NSError(
                     domain: AppInfo.name,
                     code: 408,
@@ -83,11 +88,12 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
         }
     }
 
-    private func connectOnce() async throws {
+    /// Creates the peripheral manager if needed and waits until advertising succeeds or fails.
+    func connectOnce() async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             lock.lock()
-            _wantsAdvertising = true
-            if _isAdvertising {
+            wantsAdvertising = true
+            if isAdvertisingActive {
                 lock.unlock()
                 continuation.resume()
                 return
@@ -114,26 +120,31 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
         }
     }
 
+    /// Intentional no-op so closing a mirror session does not drop shared AssistiveTouch pairing.
     public func disconnect() {
-        // Shared lifecycle: keep advertising so AssistiveTouch stays paired across sessions.
-        // Call stopAdvertising() when the AirPlay service is disabled.
+        // Intentional no-op: HID is process-wide and shared across mirror sessions.
+        // Stopping advertising on every session close would drop AssistiveTouch pairing mid-use.
+        // Call stopAdvertising() only when the user disables the AirPlay service.
     }
 
+    /// Stops BLE advertising when the user disables the AirPlay service.
     public func stopAdvertising() {
         lock.lock()
-        _wantsAdvertising = false
+        wantsAdvertising = false
         lock.unlock()
         queue.async { [weak self] in
             guard let self else { return }
             peripheralManager?.stopAdvertising()
             lock.lock()
-            _isAdvertising = false
+            isAdvertisingActive = false
             lock.unlock()
             AppLogger.info("Bluetooth HID advertising stopped", category: .bluetooth)
         }
     }
 
+    /// Maps a `PhoneInputEvent` to HID reports; drops events until an iPhone has subscribed.
     // swiftlint:disable:next cyclomatic_complexity
+    // swiftlint:disable:next function_body_length cyclomatic_complexity
     public func send(_ event: PhoneInputEvent) async throws {
         guard isConnected else {
             throw NSError(
@@ -235,113 +246,10 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
         }
     }
 
-    // MARK: - Pointer helpers
-
-    private func movePointerAbsolute(normalizedX: Double, normalizedY: Double) {
-        let report = HIDMouseReport.fromNormalized(
-            buttons: getActiveButtons(),
-            normalizedX: normalizedX,
-            normalizedY: normalizedY
-        )
-        lock.lock()
-        lastAbsX = report.x
-        lastAbsY = report.y
-        lock.unlock()
-        transmitMouseReport(report)
-    }
-
-    private func applyRelativeMove(dx: Double, dy: Double, wheel: Int8) {
-        lock.lock()
-        let nextX = min(max(Int(lastAbsX) + Int((dx * relativeMoveScale).rounded()), 0), Int(HIDMouseReport.axisMax))
-        let nextY = min(max(Int(lastAbsY) + Int((dy * relativeMoveScale).rounded()), 0), Int(HIDMouseReport.axisMax))
-        lastAbsX = UInt16(nextX)
-        lastAbsY = UInt16(nextY)
-        let x = lastAbsX
-        let y = lastAbsY
-        let btns = activeButtons
-        lock.unlock()
-        transmitMouseReport(HIDMouseReport(buttons: btns, x: x, y: y, wheel: wheel))
-    }
-
-    private func currentAbsoluteReport(buttons: UInt8) -> HIDMouseReport {
-        lock.lock()
-        defer { lock.unlock() }
-        return HIDMouseReport(buttons: buttons, x: lastAbsX, y: lastAbsY, wheel: 0)
-    }
-
-    private func clickLeft() async throws {
-        let down = setButton(.left, pressed: true)
-        transmitMouseReport(currentAbsoluteReport(buttons: down))
-        try await Task.sleep(nanoseconds: 40_000_000)
-        let up = setButton(.left, pressed: false)
-        transmitMouseReport(currentAbsoluteReport(buttons: up))
-    }
-
-    private func performSwipe(_ direction: SwipeDirection) async throws {
-        let start: (Double, Double)
-        let end: (Double, Double)
-        switch direction {
-        case .up:
-            start = (0.5, 0.85)
-            end = (0.5, 0.25)
-        case .down:
-            start = (0.5, 0.25)
-            end = (0.5, 0.85)
-        case .left:
-            start = (0.8, 0.5)
-            end = (0.2, 0.5)
-        case .right:
-            start = (0.2, 0.5)
-            end = (0.8, 0.5)
-        }
-        try await performDrag(from: start, to: end, steps: 5, stepDelayNs: 20_000_000, holdAtEndNs: 0)
-    }
-
-    private func performDrag(
-        from start: (Double, Double),
-        to end: (Double, Double),
-        steps: Int,
-        stepDelayNs: UInt64,
-        holdAtEndNs: UInt64
-    ) async throws {
-        let count = max(steps, 2)
-        movePointerAbsolute(normalizedX: start.0, normalizedY: start.1)
-        try await Task.sleep(nanoseconds: 20_000_000)
-        let down = setButton(.left, pressed: true)
-        transmitMouseReport(currentAbsoluteReport(buttons: down))
-        try await Task.sleep(nanoseconds: 30_000_000)
-
-        for index in 1 ... count {
-            let progress = Double(index) / Double(count)
-            let x = start.0 + (end.0 - start.0) * progress
-            let y = start.1 + (end.1 - start.1) * progress
-            movePointerAbsolute(normalizedX: x, normalizedY: y)
-            try await Task.sleep(nanoseconds: stepDelayNs)
-        }
-
-        if holdAtEndNs > 0 {
-            try await Task.sleep(nanoseconds: holdAtEndNs)
-        }
-
-        let up = setButton(.left, pressed: false)
-        transmitMouseReport(currentAbsoluteReport(buttons: up))
-    }
-
-    private func sendKeyChord(modifiers: UInt8, keyCode: UInt8) async throws {
-        transmitKeyboardReport(HIDKeyboardReport(modifiers: modifiers, keyCodes: [keyCode]))
-        try await Task.sleep(nanoseconds: 50_000_000)
-        transmitKeyboardReport(HIDKeyboardReport(modifiers: 0, keyCodes: []))
-    }
-
-    private func sendConsumerPulse(_ usage: ConsumerUsage) async throws {
-        transmitConsumerReport(usage.rawValue)
-        try await Task.sleep(nanoseconds: 50_000_000)
-        transmitConsumerReport(0)
-    }
-
     // MARK: - Button state
 
-    private func setButton(_ button: MouseButton, pressed: Bool) -> UInt8 {
+    /// Updates the pressed-button bitmask and returns the new combined value.
+    func setButton(_ button: MouseButton, pressed: Bool) -> UInt8 {
         lock.lock()
         defer { lock.unlock() }
         if pressed {
@@ -352,7 +260,8 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
         return activeButtons
     }
 
-    private func getActiveButtons() -> UInt8 {
+    /// Snapshot of currently pressed mouse buttons under the transport lock.
+    func getActiveButtons() -> UInt8 {
         lock.lock()
         defer { lock.unlock() }
         return activeButtons
@@ -360,7 +269,8 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
 
     // MARK: - Transmit
 
-    private func transmitMouseReport(_ report: HIDMouseReport) {
+    /// Caches and notifies the absolute mouse report (report protocol only, not boot mouse).
+    func transmitMouseReport(_ report: HIDMouseReport) {
         let data = report.rawData
         lock.lock()
         cachedMouse = data
@@ -373,7 +283,8 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
         )
     }
 
-    private func transmitKeyboardReport(_ report: HIDKeyboardReport) {
+    /// Caches and notifies keyboard report on both report and boot keyboard characteristics.
+    func transmitKeyboardReport(_ report: HIDKeyboardReport) {
         let data = report.rawData
         lock.lock()
         cachedKeyboard = data
@@ -383,7 +294,8 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
         AppLogger.debug("HID keyboard: mods=\(report.modifiers) keys=\(report.keyCodes)", category: .input)
     }
 
-    private func transmitConsumerReport(_ usage: UInt16) {
+    /// Encodes a 16-bit consumer usage and notifies subscribed centrals.
+    func transmitConsumerReport(_ usage: UInt16) {
         var data = Data(count: 2)
         data[0] = UInt8(usage & 0xFF)
         data[1] = UInt8((usage >> 8) & 0xFF)
@@ -394,18 +306,20 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
         AppLogger.debug("HID consumer: 0x\(String(usage, radix: 16))", category: .input)
     }
 
-    private func notify(_ data: Data, characteristic: CBMutableCharacteristic?) {
+    /// Pushes `data` via CoreBluetooth’s per-characteristic subscriber set, or queues when not ready.
+    func notify(_ data: Data, characteristic: CBMutableCharacteristic?) {
         guard let characteristic, let peripheralManager else { return }
         queue.async { [weak self] in
             guard let self else { return }
-            let centrals = lock.withLock { Array(self.subscribedCentrals.values) }
-            guard !centrals.isEmpty else { return }
+            let hasSubscribers = lock.withLock { !self.subscribedCentralIDs.isEmpty }
+            guard hasSubscribers else { return }
 
             if !readyToNotify {
                 enqueuePendingNotify(data, characteristic: characteristic)
                 return
             }
-            let ok = peripheralManager.updateValue(data, for: characteristic, onSubscribedCentrals: centrals)
+            // nil → CoreBluetooth notifies only centrals subscribed to this characteristic.
+            let ok = peripheralManager.updateValue(data, for: characteristic, onSubscribedCentrals: nil)
             if !ok {
                 readyToNotify = false
                 enqueuePendingNotify(data, characteristic: characteristic)
@@ -413,7 +327,8 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
         }
     }
 
-    private func enqueuePendingNotify(_ data: Data, characteristic: CBMutableCharacteristic) {
+    /// Appends a failed notify payload to the per-characteristic pending queue.
+    func enqueuePendingNotify(_ data: Data, characteristic: CBMutableCharacteristic) {
         let id = ObjectIdentifier(characteristic)
         pendingNotifyCharacteristics[id] = characteristic
         var queue = pendingNotifyQueues[id] ?? []
@@ -421,9 +336,10 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
         pendingNotifyQueues[id] = queue
     }
 
-    private func drainPendingNotifications(using peripheralManager: CBPeripheralManager) {
-        let centrals = lock.withLock { Array(subscribedCentrals.values) }
-        guard !centrals.isEmpty else {
+    /// Flushes queued notify payloads until the peripheral back-pressures again.
+    func drainPendingNotifications(using peripheralManager: CBPeripheralManager) {
+        let hasSubscribers = lock.withLock { !subscribedCentralIDs.isEmpty }
+        guard hasSubscribers else {
             pendingNotifyQueues.removeAll()
             pendingNotifyCharacteristics.removeAll()
             return
@@ -440,7 +356,7 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
                     continue
                 }
                 let data = queue.removeFirst()
-                let ok = peripheralManager.updateValue(data, for: characteristic, onSubscribedCentrals: centrals)
+                let ok = peripheralManager.updateValue(data, for: characteristic, onSubscribedCentrals: nil)
                 if ok {
                     sentAny = true
                     if queue.isEmpty {
@@ -462,7 +378,8 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
         }
     }
 
-    private func resumeConnectWaiters(error: Error?) {
+    /// Completes all pending `connect()` continuations with success or `error`.
+    func resumeConnectWaiters(error: Error?) {
         lock.lock()
         let waiters = connectWaiters
         connectWaiters.removeAll()
@@ -476,11 +393,12 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
         }
     }
 
-    private func ensureAdvertising() {
+    /// When powered on and advertising is wanted, installs GATT or starts advertising.
+    func ensureAdvertising() {
         guard let peripheralManager, peripheralManager.state == .poweredOn else { return }
         lock.lock()
-        let wants = _wantsAdvertising
-        let installed = _servicesInstalled
+        let wants = wantsAdvertising
+        let installed = servicesInstalled
         lock.unlock()
         guard wants else { return }
         if installed {
@@ -490,375 +408,12 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
         }
     }
 
-    private func startAdvertisingNow() {
+    /// Begins BLE advertising with the app display name and HID service UUID.
+    func startAdvertisingNow() {
         guard let peripheralManager else { return }
         peripheralManager.startAdvertising([
             CBAdvertisementDataLocalNameKey: AppInfo.displayName,
             CBAdvertisementDataServiceUUIDsKey: [BluetoothHIDProfile.hidService],
         ])
-    }
-
-    // MARK: - GATT install
-
-    private func installServices() {
-        guard let peripheralManager else { return }
-        lock.lock()
-        guard !_servicesInstalled, !_servicesInstalling else {
-            lock.unlock()
-            return
-        }
-        _servicesInstalling = true
-        lock.unlock()
-
-        let battery = buildBatteryService()
-        peripheralManager.add(battery)
-    }
-
-    private func buildBatteryService() -> CBMutableService {
-        let service = CBMutableService(type: BluetoothHIDProfile.batteryService, primary: true)
-        let level = CBMutableCharacteristic(
-            type: BluetoothHIDProfile.batteryLevel,
-            properties: [.read, .notifyEncryptionRequired],
-            value: nil,
-            permissions: [.readEncryptionRequired]
-        )
-        batteryLevelChar = level
-        service.characteristics = [level]
-        return service
-    }
-
-    private func buildDeviceInfoService() -> CBMutableService {
-        let service = CBMutableService(type: BluetoothHIDProfile.deviceInformationService, primary: true)
-        let manufacturer = Data(AppInfo.displayName.utf8)
-        let model = Data("\(AppInfo.displayName)-HID".utf8)
-        service.characteristics = [
-            CBMutableCharacteristic(
-                type: BluetoothHIDProfile.manufacturerName,
-                properties: [.read],
-                value: manufacturer,
-                permissions: [.readable]
-            ),
-            CBMutableCharacteristic(
-                type: BluetoothHIDProfile.modelNumber,
-                properties: [.read],
-                value: model,
-                permissions: [.readable]
-            ),
-            CBMutableCharacteristic(
-                type: BluetoothHIDProfile.pnpID,
-                properties: [.read],
-                value: BluetoothHIDProfile.pnpIDValue,
-                permissions: [.readable]
-            ),
-        ]
-        return service
-    }
-
-    // swiftlint:disable:next function_body_length
-    private func buildHIDService() -> CBMutableService {
-        let service = CBMutableService(type: BluetoothHIDProfile.hidService, primary: true)
-        // Keep Battery as a separate primary service. Including the wrong CBService
-        // (or nesting DIS) breaks iOS HID host binding and leaves pairing on "Connecting…".
-
-        let protocolMode = CBMutableCharacteristic(
-            type: BluetoothHIDProfile.protocolMode,
-            properties: [.read, .writeWithoutResponse],
-            value: nil,
-            permissions: [.readEncryptionRequired, .writeEncryptionRequired]
-        )
-        let hidInfo = CBMutableCharacteristic(
-            type: BluetoothHIDProfile.hidInformation,
-            properties: [.read],
-            value: BluetoothHIDProfile.hidInformationValue,
-            permissions: [.readEncryptionRequired]
-        )
-        let controlPoint = CBMutableCharacteristic(
-            type: BluetoothHIDProfile.hidControlPoint,
-            properties: [.writeWithoutResponse],
-            value: nil,
-            permissions: [.writeEncryptionRequired]
-        )
-
-        let bootMouse = CBMutableCharacteristic(
-            type: BluetoothHIDProfile.bootMouseInput,
-            properties: [.read, .notifyEncryptionRequired],
-            value: nil,
-            permissions: [.readEncryptionRequired]
-        )
-        let bootKeyboard = CBMutableCharacteristic(
-            type: BluetoothHIDProfile.bootKeyboardInput,
-            properties: [.read, .notifyEncryptionRequired],
-            value: nil,
-            permissions: [.readEncryptionRequired]
-        )
-        let bootKeyboardOut = CBMutableCharacteristic(
-            type: BluetoothHIDProfile.bootKeyboardOutput,
-            properties: [.read, .writeWithoutResponse, .write],
-            value: nil,
-            permissions: [.readEncryptionRequired, .writeEncryptionRequired]
-        )
-
-        let reportMap = CBMutableCharacteristic(
-            type: BluetoothHIDProfile.reportMap,
-            properties: [.read],
-            value: BluetoothHIDProfile.reportMapData,
-            permissions: [.readEncryptionRequired]
-        )
-        reportMap.descriptors = [
-            CBMutableDescriptor(
-                type: BluetoothHIDProfile.externalReportReference,
-                value: BluetoothHIDProfile.externalReportReferenceValue
-            ),
-        ]
-
-        let mouse = makeInputReport(.mouse)
-        let keyboard = makeInputReport(.keyboard)
-        let consumer = makeInputReport(.consumer)
-        let ledOut = CBMutableCharacteristic(
-            type: BluetoothHIDProfile.report,
-            properties: [.read, .writeWithoutResponse, .write],
-            value: nil,
-            permissions: [.readEncryptionRequired, .writeEncryptionRequired]
-        )
-        ledOut.descriptors = [
-            CBMutableDescriptor(
-                type: BluetoothHIDProfile.reportReference,
-                value: BluetoothHIDProfile.reportReference(.keyboardLEDs, .output)
-            ),
-        ]
-
-        service.characteristics = [
-            protocolMode,
-            hidInfo,
-            controlPoint,
-            bootMouse,
-            bootKeyboard,
-            bootKeyboardOut,
-            reportMap,
-            mouse,
-            keyboard,
-            consumer,
-            ledOut,
-        ]
-
-        mouseReportChar = mouse
-        keyboardReportChar = keyboard
-        consumerReportChar = consumer
-        bootMouseChar = bootMouse
-        bootKeyboardChar = bootKeyboard
-        return service
-    }
-
-    private func makeInputReport(_ id: BluetoothHIDProfile.ReportID) -> CBMutableCharacteristic {
-        let char = CBMutableCharacteristic(
-            type: BluetoothHIDProfile.report,
-            properties: [.read, .notifyEncryptionRequired],
-            value: nil,
-            permissions: [.readEncryptionRequired]
-        )
-        char.descriptors = [
-            CBMutableDescriptor(
-                type: BluetoothHIDProfile.reportReference,
-                value: BluetoothHIDProfile.reportReference(id, .input)
-            ),
-        ]
-        return char
-    }
-}
-
-// MARK: - CBPeripheralManagerDelegate
-
-extension BluetoothHIDTransport: CBPeripheralManagerDelegate {
-    public func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
-        AppLogger.info("Bluetooth HID peripheral state=\(peripheral.state.rawValue)", category: .bluetooth)
-        switch peripheral.state {
-        case .poweredOn:
-            ensureAdvertising()
-        case .unauthorized:
-            resumeConnectWaiters(error: NSError(
-                domain: AppInfo.name,
-                code: 403,
-                userInfo: [
-                    NSLocalizedDescriptionKey: "Bluetooth permission denied. "
-                        + "Enable Bluetooth access in System Settings.",
-                ]
-            ))
-        case .poweredOff:
-            lock.lock()
-            _isAdvertising = false
-            lock.unlock()
-            AppLogger.warning("Bluetooth powered off — HID control unavailable", category: .bluetooth)
-        case .unsupported:
-            resumeConnectWaiters(error: NSError(
-                domain: AppInfo.name,
-                code: 405,
-                userInfo: [NSLocalizedDescriptionKey: "Bluetooth LE peripheral role unsupported on this Mac."]
-            ))
-        default:
-            break
-        }
-    }
-
-    public func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?) {
-        if let error {
-            lock.lock()
-            _servicesInstalling = false
-            lock.unlock()
-            AppLogger.error("Failed to add HID service \(service.uuid): \(error.localizedDescription)", category: .bluetooth)
-            resumeConnectWaiters(error: error)
-            return
-        }
-
-        switch service.uuid {
-        case BluetoothHIDProfile.batteryService:
-            peripheral.add(buildDeviceInfoService())
-        case BluetoothHIDProfile.deviceInformationService:
-            peripheral.add(buildHIDService())
-        case BluetoothHIDProfile.hidService:
-            lock.lock()
-            _servicesInstalled = true
-            _servicesInstalling = false
-            lock.unlock()
-            startAdvertisingNow()
-        default:
-            break
-        }
-    }
-
-    public func peripheralManagerDidStartAdvertising(_: CBPeripheralManager, error: Error?) {
-        if let error {
-            lock.lock()
-            _isAdvertising = false
-            lock.unlock()
-            AppLogger.error("HID advertising failed: \(error.localizedDescription)", category: .bluetooth)
-            resumeConnectWaiters(error: error)
-            return
-        }
-
-        lock.lock()
-        let wantsAdvertising = _wantsAdvertising
-        if wantsAdvertising {
-            _isAdvertising = true
-        } else {
-            _isAdvertising = false
-        }
-        lock.unlock()
-
-        guard wantsAdvertising else {
-            peripheralManager?.stopAdvertising()
-            resumeConnectWaiters(error: NSError(
-                domain: AppInfo.name,
-                code: 409,
-                userInfo: [NSLocalizedDescriptionKey: "Bluetooth HID advertising was cancelled before it started."]
-            ))
-            return
-        }
-
-        AppLogger.info("Bluetooth HID advertising as '\(AppInfo.displayName)'", category: .bluetooth)
-        resumeConnectWaiters(error: nil)
-    }
-
-    public func peripheralManager(
-        _: CBPeripheralManager,
-        central: CBCentral,
-        didSubscribeTo characteristic: CBCharacteristic
-    ) {
-        lock.lock()
-        subscribedCentrals[central.identifier] = central
-        _subscribedCentrals.insert(central.identifier)
-        let mouse = cachedMouse
-        let keyboard = cachedKeyboard
-        let consumer = cachedConsumer
-        lock.unlock()
-
-        AppLogger.info("iPhone subscribed to HID characteristic \(characteristic.uuid)", category: .bluetooth)
-
-        // Hosts often stall until a baseline report arrives.
-        if characteristic === mouseReportChar {
-            notify(mouse, characteristic: mouseReportChar)
-        } else if characteristic.uuid == BluetoothHIDProfile.bootMouseInput {
-            notify(Data([0, 0, 0, 0]), characteristic: bootMouseChar)
-        } else if characteristic.uuid == BluetoothHIDProfile.bootKeyboardInput
-            || characteristic === keyboardReportChar
-        {
-            notify(keyboard, characteristic: keyboardReportChar)
-            notify(keyboard, characteristic: bootKeyboardChar)
-        } else if characteristic === consumerReportChar {
-            notify(consumer, characteristic: consumerReportChar)
-        } else if characteristic.uuid == BluetoothHIDProfile.batteryLevel {
-            notify(Data([100]), characteristic: batteryLevelChar)
-        }
-    }
-
-    public func peripheralManager(
-        _: CBPeripheralManager,
-        central: CBCentral,
-        didUnsubscribeFrom characteristic: CBCharacteristic
-    ) {
-        lock.lock()
-        subscribedCentrals.removeValue(forKey: central.identifier)
-        _subscribedCentrals.remove(central.identifier)
-        lock.unlock()
-        AppLogger.info("iPhone unsubscribed from \(characteristic.uuid)", category: .bluetooth)
-    }
-
-    public func peripheralManagerIsReady(toUpdateSubscribers peripheral: CBPeripheralManager) {
-        readyToNotify = true
-        drainPendingNotifications(using: peripheral)
-    }
-
-    // swiftlint:disable:next cyclomatic_complexity
-    public func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveRead request: CBATTRequest) {
-        let value: Data? = switch request.characteristic.uuid {
-        case BluetoothHIDProfile.batteryLevel:
-            Data([100])
-        case BluetoothHIDProfile.hidInformation:
-            BluetoothHIDProfile.hidInformationValue
-        case BluetoothHIDProfile.reportMap:
-            BluetoothHIDProfile.reportMapData
-        case BluetoothHIDProfile.protocolMode:
-            Data([0x01])
-        case BluetoothHIDProfile.bootMouseInput:
-            Data([0, 0, 0, 0])
-        case BluetoothHIDProfile.bootKeyboardInput:
-            lock.withLock { cachedKeyboard }
-        case BluetoothHIDProfile.report:
-            if request.characteristic === mouseReportChar {
-                lock.withLock { cachedMouse }
-            } else if request.characteristic === keyboardReportChar {
-                lock.withLock { cachedKeyboard }
-            } else if request.characteristic === consumerReportChar {
-                lock.withLock { cachedConsumer }
-            } else {
-                Data()
-            }
-        default:
-            Data()
-        }
-
-        guard let value else {
-            peripheral.respond(to: request, withResult: .unlikelyError)
-            return
-        }
-        guard request.offset <= value.count else {
-            peripheral.respond(to: request, withResult: .invalidOffset)
-            return
-        }
-        request.value = value.subdata(in: request.offset ..< value.count)
-        peripheral.respond(to: request, withResult: .success)
-    }
-
-    public func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {
-        if let first = requests.first {
-            peripheral.respond(to: first, withResult: .success)
-        }
-    }
-}
-
-private extension NSLock {
-    func withLock<T>(_ body: () -> T) -> T {
-        lock()
-        defer { unlock() }
-        return body()
     }
 }

@@ -3,7 +3,10 @@ import Combine
 import CoreGraphics
 import Testing
 
+// Unit tests for SessionManager/store behavior using SimulatedInputTransport.
+
 struct StateMachineTests {
+    /// Asserts ConnectionState helpers track device and connected/mirroring flags.
     @Test func connectionStateTransitions() {
         var state = ConnectionState.disconnected
         #expect(!state.isConnectedOrMirroring)
@@ -22,6 +25,7 @@ struct StateMachineTests {
         #expect(!state.isConnectedOrMirroring)
     }
 
+    /// Asserts portrait/landscape helpers and orientedSize swap dimensions.
     @Test func deviceOrientationHelpers() {
         let portrait = DeviceOrientation.portrait
         #expect(portrait.isPortrait)
@@ -39,6 +43,7 @@ struct StateMachineTests {
         #expect(oriented.height == 393)
     }
 
+    /// Asserts begin/disconnect publishes open/close and clears session maps.
     @Test func mirrorSessionOpenCloseCycle() {
         let manager = SessionManager()
         let device = PhoneDevice(
@@ -46,7 +51,7 @@ struct StateMachineTests {
             id: "test-device-1",
             connectionType: .simulated
         )
-        let receiver = TestPatternReceiver()
+        let receiver = StubScreenMirrorReceiver()
         let transport = SimulatedInputTransport()
 
         var opened: [String] = []
@@ -82,6 +87,7 @@ struct StateMachineTests {
         #expect(closed == [sessionID])
     }
 
+    /// Asserts a new AirPlay session replaces the previous and closes its window.
     @Test func airPlaySessionReplacementClosesPreviousWindow() {
         let manager = SessionManager()
         let first = PhoneDevice(name: "Phone A", id: "airplay-A", connectionType: .wifi)
@@ -102,5 +108,57 @@ struct StateMachineTests {
         #expect(manager.session(id: first.id) == nil)
         #expect(manager.session(id: second.id) != nil)
         #expect(closed.contains(first.id))
+    }
+
+    /// Asserts disconnect clears all sessions and settles to discovering/disconnected.
+    @Test func disconnectClearsSessionMapsAndLeavesDiscovering() async {
+        let manager = SessionManager()
+        let usb = PhoneDevice(name: "USB Phone", id: "usb-1", connectionType: .usb)
+        let wifi = PhoneDevice(name: "WiFi Phone", id: "wifi-1", connectionType: .wifi)
+
+        manager.beginMirroringSession(
+            device: usb,
+            receiver: StubScreenMirrorReceiver(),
+            transport: SimulatedInputTransport(),
+            replaceExistingAirPlay: false
+        )
+        manager.beginMirroringSession(
+            device: wifi,
+            receiver: StubScreenMirrorReceiver(),
+            transport: SimulatedInputTransport(),
+            replaceExistingAirPlay: false
+        )
+
+        #expect(manager.hasActiveSessions)
+        manager.disconnect()
+        #expect(!manager.hasActiveSessions)
+        #expect(manager.session(id: usb.id) == nil)
+        #expect(manager.session(id: wifi.id) == nil)
+        #expect(manager.receiver(for: usb.id) == nil)
+
+        for _ in 0 ..< 50 {
+            if manager.state == .discovering || manager.state == .disconnected {
+                return
+            }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        Issue.record("Unexpected state after disconnect: \(manager.state)")
+    }
+
+    /// Asserts rapid enable/disable leaves the AirPlay service disabled.
+    @Test func rapidServiceToggleLeavesServiceDisabled() async {
+        let manager = SessionManager()
+        manager.setServiceEnabled(true)
+        manager.setServiceEnabled(false)
+        #expect(!manager.isServiceEnabled)
+
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        #expect(!manager.isServiceEnabled)
+        switch manager.state {
+        case .disconnected, .discovering, .failed:
+            break
+        default:
+            Issue.record("Unexpected state after disable: \(manager.state)")
+        }
     }
 }

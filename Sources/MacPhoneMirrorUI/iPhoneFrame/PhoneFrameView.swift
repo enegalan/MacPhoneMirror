@@ -1,6 +1,8 @@
 import MacPhoneMirrorCore
 import SwiftUI
 
+// Vector iPhone bezel around the mirror content; visual only (not hit-tested as glass).
+
 public struct PhoneFrameView<ScreenContent: View>: View {
     public let model: PhoneModel
     public let orientation: DeviceOrientation
@@ -8,6 +10,7 @@ public struct PhoneFrameView<ScreenContent: View>: View {
     public let sessionID: String?
     public let screenContent: ScreenContent
 
+    /// Creates a phone frame for the given model, orientation, style, and screen content.
     public init(
         model: PhoneModel = .iPhone16Pro,
         orientation: DeviceOrientation = .portrait,
@@ -75,8 +78,6 @@ public struct PhoneFrameView<ScreenContent: View>: View {
         let outerSize = CGSize(width: chassisSize.width + 16, height: chassisSize.height + 16)
 
         return ZStack {
-            hardwareButtonsLayer(outerSize: outerSize)
-
             RoundedRectangle(cornerRadius: model.outerCornerRadius + 2, style: .continuous)
                 .fill(LinearGradient(gradient: theme.metalGradient, startPoint: .topLeading, endPoint: .bottomTrailing))
                 .frame(width: outerSize.width, height: outerSize.height)
@@ -93,30 +94,5 @@ public struct PhoneFrameView<ScreenContent: View>: View {
         }
         .frame(width: outerSize.width, height: outerSize.height)
         .shadow(color: style.showShadow ? Color.black.opacity(0.45) : .clear, radius: 36, x: 0, y: 18)
-    }
-
-    @ViewBuilder
-    private func hardwareButtonsLayer(outerSize: CGSize) -> some View {
-        if style.showHardwareButtons, orientation.isPortrait {
-            HardwareButtonsView(
-                frameHeight: chassisSize.height + 16,
-                onActionButton: {
-                    Task { try? await SessionManager.shared.sendInputEvent(.siri, sessionID: sessionID) }
-                },
-                onVolumeUp: {
-                    Task { try? await SessionManager.shared.sendInputEvent(.volumeUp, sessionID: sessionID) }
-                },
-                onVolumeDown: {
-                    Task { try? await SessionManager.shared.sendInputEvent(.volumeDown, sessionID: sessionID) }
-                },
-                onPower: {
-                    Task { try? await SessionManager.shared.sendInputEvent(.lockScreen, sessionID: sessionID) }
-                },
-                onCameraControl: {
-                    AppLogger.info("Camera control triggered", category: .input)
-                }
-            )
-            .frame(width: outerSize.width, height: outerSize.height)
-        }
     }
 }

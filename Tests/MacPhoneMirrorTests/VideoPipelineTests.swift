@@ -1,31 +1,11 @@
 @testable import MacPhoneMirrorCore
-import CoreGraphics
 import CoreVideo
 import Testing
 
+// Unit tests for video frame / decoder helpers without a live phone stream.
+
 struct VideoPipelineTests {
-    @Test func performanceMonitorCalculations() {
-        let monitor = PerformanceMonitor()
-        monitor.reset()
-
-        let resolution = CGSize(width: 1179, height: 2556)
-        for _ in 0 ..< 10 {
-            monitor.recordFrameReceived(resolution: resolution)
-            monitor.recordDecodeTime(2.5)
-            monitor.recordRenderTime(1.1)
-        }
-        monitor.recordDroppedFrame()
-
-        let stats = monitor.currentStatistics()
-        #expect(stats.totalFrames == 10)
-        #expect(stats.droppedFrames == 1)
-        #expect(stats.resolution == resolution)
-        #expect(stats.decodeTimeMs > 0)
-        #expect(stats.renderTimeMs > 0)
-        #expect(stats.totalLatencyMs > 0)
-        #expect(stats.dropRatePercentage > 0)
-    }
-
+    /// Asserts VideoFrame wraps a CVPixelBuffer with correct size and index.
     @Test func videoFrameCreation() {
         var pixelBuffer: CVPixelBuffer?
         let attrs: [String: Any] = [
@@ -47,5 +27,39 @@ struct VideoPipelineTests {
             #expect(frame.height == 200)
             #expect(frame.frameIndex == 42)
         }
+    }
+
+    /// numOfArrays lives at zero-based offset 22 in HEVCDecoderConfigurationRecord.
+    @Test func parseHVCCReadsNumArraysAtOffset22() {
+        var hvcc = Data(count: 23)
+        hvcc[0] = 1 // configurationVersion
+
+        let vps = Data([0x40, 0x01, 0x0C, 0x01])
+        let sps = Data([0x42, 0x01, 0x01, 0x01])
+        let pps = Data([0x44, 0x01, 0xC0, 0xF2])
+
+        // Intentionally wrong if reader starts at offset 23: first array type would be treated as count.
+        hvcc[22] = 3
+        appendHVCCArray(to: &hvcc, nalType: 32, nals: [vps])
+        appendHVCCArray(to: &hvcc, nalType: 33, nals: [sps])
+        appendHVCCArray(to: &hvcc, nalType: 34, nals: [pps])
+
+        let decoder = AirPlayH264Decoder()
+        let sets = decoder.parseHVCC(hvcc)
+        #expect(sets?.count == 3)
+        #expect(sets?[0] == vps)
+        #expect(sets?[1] == sps)
+        #expect(sets?[2] == pps)
+    }
+}
+
+private func appendHVCCArray(to data: inout Data, nalType: UInt8, nals: [Data]) {
+    data.append(nalType) // array_completeness=0, nal type in low 6 bits
+    data.append(UInt8((nals.count >> 8) & 0xFF))
+    data.append(UInt8(nals.count & 0xFF))
+    for nal in nals {
+        data.append(UInt8((nal.count >> 8) & 0xFF))
+        data.append(UInt8(nal.count & 0xFF))
+        data.append(nal)
     }
 }

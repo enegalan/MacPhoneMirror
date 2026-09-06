@@ -3,6 +3,9 @@ import MacPhoneMirrorCore
 import MacPhoneMirrorUI
 import SwiftUI
 
+// SwiftUI @main entry: main window, about window, per-device mirror windows, and menu bar.
+// Wires SessionManager into the UI scenes; AppDelegate handles launch side effects.
+
 @main
 struct MacPhoneMirrorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -16,11 +19,8 @@ struct MacPhoneMirrorApp: App {
         )
     }
 
-    private var aboutLogo: NSImage? {
-        AppResources.image(forResource: "logo", withExtension: "png")
-    }
-
     var body: some Scene {
+        // Main window
         WindowGroup(id: MirrorWindowID.main) {
             MainWindowView()
                 .frame(minWidth: 850, minHeight: 650)
@@ -32,6 +32,7 @@ struct MacPhoneMirrorApp: App {
             AboutCommands()
         }
 
+        // Per-device mirror windows
         WindowGroup(id: MirrorWindowID.session, for: String.self) { $sessionID in
             if sessionID.isEmpty {
                 Text("No device session")
@@ -47,13 +48,15 @@ struct MacPhoneMirrorApp: App {
         .defaultSize(width: 480, height: 860)
         .handlesExternalEvents(matching: [])
 
+        // About window
         WindowGroup(id: MirrorWindowID.about) {
-            AboutView(logo: aboutLogo.map { Image(nsImage: $0) })
+            AboutView(logo: AppResources.image(forResource: "logo", withExtension: "png").map { Image(nsImage: $0) })
                 .frame(minWidth: 320, minHeight: 340)
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
 
+        // Menu bar
         MenuBarExtra {
             MenuBarExtraView()
         } label: {
@@ -66,6 +69,8 @@ struct MacPhoneMirrorApp: App {
         .menuBarExtraStyle(.window)
     }
 }
+
+// Commands for the about window.
 
 private struct AboutCommands: Commands {
     @Environment(\.openWindow) private var openWindow

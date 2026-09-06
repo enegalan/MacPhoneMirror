@@ -4,11 +4,10 @@ import Foundation
 import Metal
 import MetalKit
 
-public protocol VideoRenderer: AnyObject, Sendable {
-    func render(_ frame: VideoFrame)
-}
+// Zero-copy CVPixelBuffer → Metal texture draw for MTKView.
+// Avoids CPU copies so 60 FPS mirroring stays within thermal/CPU budget.
 
-public final class MetalVideoRenderer: NSObject, VideoRenderer, MTKViewDelegate, @unchecked Sendable {
+public final class MetalVideoRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
     public let device: MTLDevice
     private let commandQueue: MTLCommandQueue
     private var textureCache: CVMetalTextureCache?
@@ -18,6 +17,7 @@ public final class MetalVideoRenderer: NSObject, VideoRenderer, MTKViewDelegate,
     private var renderPipelineState: MTLRenderPipelineState?
     private var didLogFirstDraw = false
 
+    /// Builds Metal queue, texture cache, and fullscreen blit pipeline; nil if GPU unavailable.
     public init?(device: MTLDevice? = MTLCreateSystemDefaultDevice()) {
         guard let device,
               let queue = device.makeCommandQueue()
@@ -35,6 +35,7 @@ public final class MetalVideoRenderer: NSObject, VideoRenderer, MTKViewDelegate,
         setupPipeline()
     }
 
+    /// Compiles inline Metal shaders for a fullscreen textured triangle strip.
     private func setupPipeline() {
         let shaderSource = """
         #include <metal_stdlib>
@@ -90,8 +91,8 @@ public final class MetalVideoRenderer: NSObject, VideoRenderer, MTKViewDelegate,
         }
     }
 
+    /// Publishes the latest frame as a Metal texture under renderLock for the next draw.
     public func render(_ frame: VideoFrame) {
-        let start = CFAbsoluteTimeGetCurrent()
         guard let cache = textureCache else { return }
 
         let pixelBuffer = frame.pixelBuffer
@@ -119,10 +120,6 @@ public final class MetalVideoRenderer: NSObject, VideoRenderer, MTKViewDelegate,
             currentCVTexture = metalTextureOut
             currentTexture = texture
             renderLock.unlock()
-
-            let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000.0
-            PerformanceMonitor.shared.recordRenderTime(elapsed)
-            PerformanceMonitor.shared.recordFrameReceived(resolution: CGSize(width: width, height: height))
         } else if status != kCVReturnSuccess {
             AppLogger.warning("CVMetalTextureCacheCreateTextureFromImage failed: \(status)", category: .airplay)
         }
@@ -130,8 +127,10 @@ public final class MetalVideoRenderer: NSObject, VideoRenderer, MTKViewDelegate,
 
     // MARK: - MTKViewDelegate
 
+    /// No-op; aspect is handled by the viewport, not drawable size changes.
     public func mtkView(_: MTKView, drawableSizeWillChange _: CGSize) {}
 
+    /// Draws the locked current texture into the MTKView drawable (decode/render threads share via lock).
     public func draw(in view: MTKView) {
         renderLock.lock()
         let texture = currentTexture

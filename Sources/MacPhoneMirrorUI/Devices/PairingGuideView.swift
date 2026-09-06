@@ -1,10 +1,13 @@
 import MacPhoneMirrorCore
 import SwiftUI
 
+// Step-by-step guide for enabling Screen Mirroring to this Mac.
+
 public struct PairingGuideView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedTab: Int
 
+    /// Creates the connection guide, optionally opening a specific tab.
     public init(initialTab: Int = 0) {
         _selectedTab = State(initialValue: initialTab)
     }
@@ -52,7 +55,7 @@ public struct PairingGuideView: View {
         Picker("", selection: $selectedTab) {
             Text("USB Cable").tag(0)
             Text("Wi-Fi").tag(1)
-            Text("Mouse & Keyboard").tag(2)
+            Text("Pointer Control").tag(2)
         }
         .pickerStyle(.segmented)
         .padding(16)
@@ -137,6 +140,7 @@ public struct PairingGuideView: View {
         }
     }
 
+    /// Numbered instruction row shared by USB, Wi-Fi, and Bluetooth guides.
     private func stepItem(number: String, title: String, detail: String) -> some View {
         HStack(alignment: .top, spacing: 14) {
             ZStack {

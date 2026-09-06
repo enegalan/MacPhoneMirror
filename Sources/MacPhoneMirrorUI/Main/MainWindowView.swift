@@ -2,6 +2,8 @@ import Combine
 import MacPhoneMirrorCore
 import SwiftUI
 
+// Primary NavigationSplitView host for Service / Control / Settings plus session sidebar.
+
 public struct MainWindowView: View {
     @State private var selectedTab: AppNavigationTab = .allCases.first!
 
@@ -10,6 +12,7 @@ public struct MainWindowView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
 
+    /// Creates the main split-view window with default tab selection.
     public init() {}
 
     public var body: some View {

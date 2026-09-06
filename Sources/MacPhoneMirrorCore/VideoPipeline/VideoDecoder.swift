@@ -3,8 +3,13 @@ import CoreVideo
 import Foundation
 import VideoToolbox
 
+// Generic VideoToolbox decoder utilities / delegate hooks shared by AirPlay decode.
+// Includes one-shot failure gates so sync DecodeFrame and async callbacks do not double-count.
+
 public protocol VideoDecoderDelegate: AnyObject, Sendable {
+    /// Delivers a decoded BGRA pixel buffer with presentation time.
     func decoder(_ decoder: VideoDecoder, didOutputPixelBuffer pixelBuffer: CVPixelBuffer, presentationTime: CMTime)
+    /// Reports a decode-path failure to the consumer.
     func decoder(_ decoder: VideoDecoder, didFailWithError error: Error)
 }
 
@@ -21,12 +26,14 @@ public final class VideoDecoder: @unchecked Sendable {
 
     public weak var delegate: VideoDecoderDelegate?
 
+    /// Empty decoder; call configure(with:) before decode or rely on sample-buffer format fallback.
     public init() {}
 
     deinit {
         invalidateSession()
     }
 
+    /// Builds a real-time VTDecompressionSession (Metal-compatible BGRA) and resets in-flight accounting.
     public func configure(with formatDesc: CMVideoFormatDescription) -> Bool {
         formatDescription = formatDesc
         didLogFirstPixelBuffer = false
@@ -97,6 +104,7 @@ public final class VideoDecoder: @unchecked Sendable {
         return true
     }
 
+    /// Async DecodeFrame with low-latency drop when in-flight exceeds the cap; auto-configures if needed.
     public func decode(sampleBuffer: CMSampleBuffer) {
         guard let session = decompressionSession else {
             if let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer) {
@@ -109,7 +117,6 @@ public final class VideoDecoder: @unchecked Sendable {
 
         let lowLatency = AppPreferences.lowLatencyMode
         if lowLatency, currentInFlight() >= maxInFlightLowLatency {
-            PerformanceMonitor.shared.recordDroppedFrame()
             return
         }
 
@@ -125,7 +132,6 @@ public final class VideoDecoder: @unchecked Sendable {
         inFlightFrames += 1
         inFlightLock.unlock()
 
-        let start = CFAbsoluteTimeGetCurrent()
         let status = VTDecompressionSessionDecodeFrame(
             session,
             sampleBuffer: sampleBuffer,
@@ -138,13 +144,10 @@ public final class VideoDecoder: @unchecked Sendable {
             // Sync reject. Callback may also run; finishTicket is one-shot.
             finishTicket(ticket)
             AppLogger.warning("VTDecompressionSessionDecodeFrame status: \(status)", category: .airplay)
-            PerformanceMonitor.shared.recordDroppedFrame()
-        } else {
-            let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000.0
-            PerformanceMonitor.shared.recordDecodeTime(elapsed)
         }
     }
 
+    /// Notifies the delegate of a successful decode (logs once for the first buffer).
     private func handleDecodedFrame(_ pixelBuffer: CVPixelBuffer, pts: CMTime) {
         if !didLogFirstPixelBuffer {
             didLogFirstPixelBuffer = true
@@ -155,6 +158,7 @@ public final class VideoDecoder: @unchecked Sendable {
         delegate?.decoder(self, didOutputPixelBuffer: pixelBuffer, presentationTime: pts)
     }
 
+    /// Rate-limited logging of async callback failures.
     fileprivate func noteDecodeError(_ status: OSStatus) {
         decodeErrorCount += 1
         if decodeErrorCount == 1 || decodeErrorCount.isMultiple(of: 120) {
@@ -171,18 +175,21 @@ public final class VideoDecoder: @unchecked Sendable {
         inFlightLock.unlock()
     }
 
+    /// Decrements in-flight when VT provides no frameRefcon (locked).
     fileprivate func noteFrameCompleted() {
         inFlightLock.lock()
         inFlightFrames = max(0, inFlightFrames - 1)
         inFlightLock.unlock()
     }
 
+    /// Locked snapshot of outstanding DecodeFrame submissions.
     private func currentInFlight() -> Int {
         inFlightLock.lock()
         defer { inFlightLock.unlock() }
         return inFlightFrames
     }
 
+    /// Invalidates the VT session so the next configure/decode creates a fresh one.
     public func invalidateSession() {
         if let session = decompressionSession {
             VTDecompressionSessionInvalidate(session)
@@ -196,6 +203,7 @@ private final class InFlightTicket: @unchecked Sendable {
     private let lock = NSLock()
     private var didComplete = false
 
+    /// Returns true only on the first completion; subsequent calls are no-ops under lock.
     func markCompleted() -> Bool {
         lock.lock()
         defer { lock.unlock() }

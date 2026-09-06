@@ -2,26 +2,32 @@
 
 ## Overview
 
-MacPhoneMirror is structured with a modular, protocol-oriented Swift 6 architecture separating business logic, hardware abstraction, video rendering, input mapping, and UI presentation.
+MacPhoneMirror is a macOS AirPlay **receiver** app with a modular Swift 6 layout: Core holds session, video, input, and discovery; UI presents Service / Control / Settings and per-device mirror windows.
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────┐
 │                          MacPhoneMirror (App)                          │
-│          App Entry, NSApplicationDelegate, Keyboard Shortcuts          │
+│              App Entry, NSApplicationDelegate, Menu Bar                │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │
         ┌───────────────────────────┴───────────────────────────┐
         ▼                                                       ▼
-┌───────────────────────────────┐               ┌───────────────────────────────┐
-│       MacPhoneMirrorUI        │               │      MacPhoneMirrorCore       │
-│  - MainWindowView & Sidebar   │◄──────────────┤  - State Machine & Session    │
-│  - Realistic iPhone Frame     │ (State &      │  - Video Pipeline & Metal     │
-│  - MetalVideoView MTKView     │  Receivers)   │  - Input & Coordinate Mapper  │
-│  - Diagnostics & HUD Overlay  │               │  - Device Discovery           │
-│  - Device List & Pairing View │               │  - Bluetooth HID Transport    │
-│  - Settings & Preferences     │               │  - Structured Logger          │
-└───────────────────────────────┘               └───────────────────────────────┘
+┌────────────────────────────────┐               ┌───────────────────────────────┐
+│       MacPhoneMirrorUI         │               │      MacPhoneMirrorCore       │
+│  - MainWindowView & Sidebar    │◄──────────────┤  - SessionManager             │
+│  - Service / Control / Settings│ (State &      │  - AirPlay receiver stack     │
+│  - PhoneFrame + MetalVideo     │  Receivers)   │  - USB capture + HID input    │
+│  - MirrorSessionWindow         │               │  - Video pipeline & Metal     │
+│  - PairingGuideView            │               │  - AppLogger                  │
+└────────────────────────────────┘               └───────────────────────────────┘
 ```
+
+Runtime flow is **receiver-first**:
+
+1. User enables the AirPlay service (Service tab).
+2. Mac advertises via Bonjour (`_airplay._tcp`); iPhone connects with Screen Mirroring.
+3. Optional USB iPhone screen devices auto-open a mirror session.
+4. Each active device gets its own `MirrorSessionWindow`.
 
 ---
 
@@ -31,51 +37,52 @@ MacPhoneMirror is structured with a modular, protocol-oriented Swift 6 architect
 
 #### A. Discovery Layer (`DeviceDiscovery`)
 * `DeviceDiscovery`: Protocol for reactive device scanning.
-* `USBDeviceDiscovery`: Listens to `AVCaptureDevice` connect/disconnect events.
-* `BonjourDiscovery`: Scans for `_airplay._tcp` Bonjour services using `Network.framework`.
-* `BluetoothDiscovery`: CoreBluetooth `CBCentralManager` scanning.
-* `CompositeDiscovery`: Aggregates and deduplicates discovered devices into a unified reactive stream.
+* `USBDeviceDiscovery`: Listens to `AVCaptureDevice` connect/disconnect events for wired screen devices.
+* `DeviceDiscoveryFilter`: Distinguishes USB phone screen capture from Continuity Camera.
+
+AirPlay does **not** browse remote phones; the Mac is the advertised receiver.
 
 #### B. Screen Mirroring (`ScreenMirrorReceiver`)
-* `ScreenMirrorReceiver`: Core protocol defining `start()`, `stop()`, and `framePublisher: AnyPublisher<VideoFrame, Never>`.
-* `AVFoundationUSBReceiver`: High-speed USB screen capture receiver with zero external dependencies.
-* `NetworkStreamReceiver`: AirPlay network receiver handling RTP packet parsing and decompression.
-* `TestPatternReceiver`: Real-time 60 FPS interactive iOS display simulator.
+* `ScreenMirrorReceiver`: Protocol with `start()`, `stop()`, and `framePublisher`.
+* `NetworkStreamReceiver`: AirPlay control listener, session lifecycle, and frame fan-out.
+* `AVFoundationUSBReceiver`: USB screen capture.
+
+Supporting AirPlay pieces: `AirPlayConnectionHandler`, `AirPlayMirrorServer`, `AirPlayAudioServer`, `AirPlayTimingServer`, `AirPlayIdentity` / pairing PIN display, FairPlay / crypto helpers.
 
 #### C. Video Pipeline
-* `VideoFrame`: Holds `CVPixelBuffer`, orientation, presentation timestamp, and capture time.
-* `VideoDecoder`: VideoToolbox `VTDecompressionSession` for hardware-accelerated H.264/HEVC decoding.
-* `MetalVideoRenderer`: Zero-copy Metal texture rendering with `MTKViewDelegate` and custom shaders.
-* `PerformanceMonitor`: Thread-safe tracker measuring FPS, decode latency, render latency, bit rate, and dropped frames.
+* `VideoFrame`: `CVPixelBuffer`, orientation, timestamps.
+* `VideoDecoder` / `AirPlayH264Decoder`: VideoToolbox H.264 / HEVC decode for the mirror stream.
+* `MetalVideoRenderer`: Zero-copy Metal texture rendering for `MTKView`.
 
-#### D. Input & Control Subsystem
-* `InputCoordinateMapper`: Translates Mac window click/drag coordinates into iPhone normalized screen coordinates and native pixel coordinates.
-* `PhoneInputTransport`: Protocol for transmitting input events (`pointerMove`, `pointerDown`, `pointerUp`, `keyDown`, `scroll`, `homeButton`, `appSwitcher`, `lockScreen`).
-* `BluetoothHIDTransport`: Formats and sends standard HID mouse, keyboard, and consumer control reports.
-* `AssistiveTouchProfile`: Predefined actions and shortcuts for navigating iOS with AssistiveTouch.
-* `KeyboardShortcutMapper`: Translates Mac key codes into USB HID usage codes.
+#### D. Input & Control
+* `InputCoordinateMapper`: Viewport → normalized phone coordinates.
+* `PhoneInputTransport`: Protocol for pointer / button events.
+* `BluetoothHIDTransport`: BLE HID peripheral for AssistiveTouch pointer control.
+* `SimulatedInputTransport`: Test / fallback transport.
 
 #### E. State Machine & Session Manager
-* `ConnectionState`: State enum (`disconnected`, `discovering`, `connecting`, `mirroring`, `controlling`, `reconnecting`, `failed`).
-* `SessionManager`: Singleton coordinating multiple concurrent sessions, each keyed by its session ID. Per-session resources (`sessionsByID`, `sessionReceivers`, `sessionTransports`) track a `MirrorSession` for device + orientation state, a `ScreenMirrorReceiver` for the video stream, and a `PhoneInputTransport` for input. A dedicated `MirrorSessionWindow` renders each device in its own window.
+* `ConnectionState`: `disconnected`, `discovering`, `connecting`, `mirroring`, `failed`.
+* `SessionManager`: Facade over `MirrorSessionStore`, `AirPlayServiceController`, `USBAutoConnectCoordinator`, and `SessionInputRouter`. Opens/closes `MirrorSessionWindow` via publishers.
 
 ---
 
 ## 2. UI Layer (`MacPhoneMirrorUI`)
 
-* **`MainWindowView`**: Unified navigation split view with sidebar, live video viewport, and toolbar.
-* **`PhoneFrameView`**: Vector-rendered realistic iPhone chassis with titanium finishes, squircle screen clipping, dynamic island, notch, and clickable hardware buttons.
-* **`DynamicIslandView`**: Animated Dynamic Island with compact, expanded media, and notification states.
-* **`DiagnosticsOverlayView`**: Live HUD displaying real-time FPS, decode latency, render latency, and bit rate.
-* **`QuickControlsBar`**: Floating controls for Home (`⌘H`), App Switcher (`⌘Tab`), and Lock (`Esc`). Orientation follows the mirrored device automatically.
-* **`DeviceListView` & `PairingGuideView`**: Device management and interactive pairing walkthroughs.
-* **`ControlConfigView` & `AssistiveTouchGuideView`**: Visual instructions for enabling AssistiveTouch pointer control on iPhone.
-* **`SettingsView`**: Preferences for video quality, appearance, input sensitivity, and permissions.
+* **`MainWindowView`**: Navigation split (Service, Control, Settings) plus sidebar of active sessions.
+* **`ServiceView`**: AirPlay service toggle, device name, pairing PIN when required, connected devices.
+* **`ControlConfigView`** / **`AssistiveTouchGuideView`**: Pointer control setup on iPhone.
+* **`PairingGuideView`**: How to connect walkthrough.
+* **`PhoneFrameView`**: Vector iPhone chassis.
+* **`MirrorViewportView`** / **`MetalVideoView`**: Live mirror surface and input forwarding.
+* **`MirrorSessionWindow`**: One window per mirrored device.
+* **`SettingsView`**: Quality, appearance, input, permissions, launch at login, audio toggles.
+* **`MenuBarExtraView`**: Menu bar status and quick actions.
 
 ---
 
 ## 3. Concurrency & Swift 6 Safety
 
-* All asynchronous methods strictly avoid holding `NSLock` across suspension points.
-* Data models (`PhoneDevice`, `PhoneModel`, `VideoFrame`, `StreamStatistics`) conform to `Sendable`.
-* AppKit lifecycle and UI-bound methods are isolated with `@MainActor`.
+* Avoid holding `NSLock` across `await` / suspension points.
+* Models (`PhoneDevice`, `PhoneModel`, `VideoFrame`) are `Sendable`.
+* AppKit / SwiftUI-bound updates use the main queue or `@MainActor` where required.
+* Network, HID, and decode work stay on dedicated `DispatchQueue`s.

@@ -2,6 +2,9 @@ import AVFoundation
 import Combine
 import Foundation
 
+// Observes AVCaptureDevice connect/disconnect for wired iPhone screen capture.
+// AirPlay is receiver-advertised; USB is the only path that discovers phones as capture devices.
+
 public final class USBDeviceDiscovery: NSObject, DeviceDiscovery, @unchecked Sendable {
     private let devicesSubject = CurrentValueSubject<[PhoneDevice], Never>([])
     private let lock = NSLock()
@@ -22,10 +25,13 @@ public final class USBDeviceDiscovery: NSObject, DeviceDiscovery, @unchecked Sen
         return _isScanning
     }
 
+    /// Creates an idle discovery instance; call `start()` to begin observing devices.
     override public init() {
         super.init()
     }
 
+    /// Registers AVCaptureDevice connect/disconnect observers and publishes the current device list.
+    /// No-op if already scanning.
     public func start() {
         lock.lock()
         guard !_isScanning else {
@@ -57,6 +63,7 @@ public final class USBDeviceDiscovery: NSObject, DeviceDiscovery, @unchecked Sen
         refreshDevices()
     }
 
+    /// Removes notification observers and marks scanning as stopped.
     public func stop() {
         lock.lock()
         _isScanning = false
@@ -69,10 +76,11 @@ public final class USBDeviceDiscovery: NSObject, DeviceDiscovery, @unchecked Sen
         AppLogger.info("Stopped USB Device Discovery", category: .device)
     }
 
+    /// Re-enumerates external muxed capture devices and publishes filtered iPhone/iPad entries.
     public func refreshDevices() {
         let discovery = AVCaptureDevice.DiscoverySession(
             deviceTypes: [.external],
-            mediaType: .video,
+            mediaType: .muxed,
             position: .unspecified
         )
 
@@ -94,6 +102,7 @@ public final class USBDeviceDiscovery: NSObject, DeviceDiscovery, @unchecked Sen
         devicesSubject.send(discovered)
     }
 
+    /// Best-effort `PhoneModel` from the capture device name; defaults to `.iPhone16Pro` when unknown.
     private func mapNameToModel(_ name: String) -> PhoneModel {
         for model in PhoneModel.allCases where name.contains(model.rawValue) {
             return model

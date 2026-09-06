@@ -2,48 +2,42 @@ import CryptoKit
 import Foundation
 import Network
 
-// swiftlint:disable file_length
+// Per-TCP-connection AirPlay/RTSP request loop (buffer, parse, dispatch).
+// Owns pairing/crypto session state for one iPhone connection.
 
-struct AirPlayHTTPRequest {
-    let method: String
-    let path: String
-    let headers: [String: String]
-    let body: Data
-    let cSeq: Int
-}
-
-// swiftlint:disable:next type_body_length
 final class AirPlayConnectionHandler: @unchecked Sendable {
     var onMirroringStarted: ((String) -> Void)?
     var onSessionEnded: (() -> Void)?
 
-    private let connection: NWConnection
-    private let identity: AirPlayIdentity
+    let connection: NWConnection
+    let identity: AirPlayIdentity
     private let queue: DispatchQueue
     private var buffer = Data()
-    private var clientEd25519PublicKey: Data?
-    private var clientECDHPublicKey: Data?
-    private var ecdhPrivateKey: Curve25519.KeyAgreement.PrivateKey?
-    private var ecdhPublicKeyData: Data?
-    private let rtspSessionID = "1"
-    private let timingPort: UInt16 = 7102
-    private var eventPort: UInt16 = 0
-    private var aesKey = Data()
-    private var aesIV = Data()
-    private var streamConnectionID: UInt64 = 0
+    var clientEd25519PublicKey: Data?
+    var clientECDHPublicKey: Data?
+    var ecdhPrivateKey: Curve25519.KeyAgreement.PrivateKey?
+    var ecdhPublicKeyData: Data?
+    let rtspSessionID = "1"
+    let timingPort: UInt16 = AirPlayPorts.timingDefault
+    var eventPort: UInt16 = 0
+    var aesKey = Data()
+    var aesIV = Data()
+    var streamConnectionID: UInt64 = 0
     private var hasStartedReceiving = false
     private var didLogFirstBytes = false
     private var isFinished = false
-    private var sessionIsActive = false
-    var controlPort: UInt16 = 7000
+    var sessionIsActive = false
+    var controlPort: UInt16 = AirPlayPorts.controlDefault
     private var idleTimer: DispatchWorkItem?
 
+    /// Binds this handler to one TCP connection and shared receiver identity.
     init(connection: NWConnection, identity: AirPlayIdentity, queue: DispatchQueue) {
         self.connection = connection
         self.identity = identity
         self.queue = queue
     }
 
+    /// Starts the NWConnection and begins the RTSP/HTTP receive loop when ready.
     func start() {
         connection.stateUpdateHandler = { [weak self] state in
             guard let self, !self.isFinished else { return }
@@ -70,20 +64,23 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
         connection.start(queue: queue)
     }
 
+    /// Cancels the underlying connection without waiting for a graceful TEARDOWN.
     func cancel() {
         isFinished = true
         connection.cancel()
     }
 
+    /// Issues the next `NWConnection.receive` for RTSP/HTTP bytes.
     private func receive() {
         connection.receive(
             minimumIncompleteLength: 1,
-            maximumLength: 131_072
+            maximumLength: AirPlayTiming.receiveMaxLength
         ) { [weak self] content, _, isComplete, error in
             self?.handleReceive(content: content, isComplete: isComplete, error: error)
         }
     }
 
+    /// Appends bytes, parses requests, and finishes on error or EOF.
     private func handleReceive(content: Data?, isComplete: Bool, error: Error?) {
         if let content, !content.isEmpty {
             cancelIdleLog()
@@ -126,51 +123,19 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
         receive()
     }
 
+    /// Dispatches every complete request currently buffered.
     private func processBuffer() {
         while let request = parseNextRequest() {
             handle(request)
         }
     }
 
+    /// Pulls one framed HTTP/RTSP request from `buffer`, or nil if incomplete.
     private func parseNextRequest() -> AirPlayHTTPRequest? {
-        guard let headerEnd = buffer.range(of: Data("\r\n\r\n".utf8)) else {
-            return nil
-        }
-
-        let headerData = buffer[..<headerEnd.lowerBound]
-        guard let headerText = String(data: headerData, encoding: .utf8) else {
-            buffer.removeAll()
-            return nil
-        }
-
-        let lines = headerText.components(separatedBy: "\r\n")
-        guard let requestLine = lines.first else { return nil }
-
-        let parts = requestLine.split(separator: " ", maxSplits: 2).map(String.init)
-        guard parts.count >= 2 else { return nil }
-
-        var headers: [String: String] = [:]
-        for line in lines.dropFirst() where line.contains(":") {
-            let split = line.split(separator: ":", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
-            if split.count == 2 {
-                headers[split[0].lowercased()] = split[1]
-            }
-        }
-
-        let contentLength = Int(headers["content-length"] ?? "0") ?? 0
-        let bodyStart = headerEnd.upperBound
-        let totalLength = bodyStart + contentLength
-        guard buffer.count >= totalLength else { return nil }
-
-        let body = Data(buffer[bodyStart ..< totalLength])
-        buffer.removeSubrange(..<totalLength)
-
-        let cSeq = Int(headers["cseq"] ?? "0") ?? 0
-        let rawPath = parts[1]
-        let path = rawPath.split(separator: "?", maxSplits: 1).first.map(String.init) ?? rawPath
-        return AirPlayHTTPRequest(method: parts[0], path: path, headers: headers, body: body, cSeq: cSeq)
+        AirPlayHTTPParser.parseNextRequest(from: &buffer)
     }
 
+    /// Routes one AirPlay/RTSP method to the pairing, SETUP, or info handlers.
     // swiftlint:disable:next cyclomatic_complexity
     private func handle(_ request: AirPlayHTTPRequest) {
         if request.headers["session"] != nil || AirPlaySessionContext.shared.isSessionActive() {
@@ -204,7 +169,9 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
             respondOK(cSeq: request.cSeq, body: Data())
         case "POST" where request.path == "/fp-setup":
             handleFPSetup(body: request.body, cSeq: request.cSeq)
-        case "POST" where request.path == "/feedback" || request.path == "/command":
+        case "POST" where request.path == "/feedback"
+            || request.path == "/command"
+            || request.path == "/audioMode":
             respondOK(cSeq: request.cSeq, body: Data())
         case "TEARDOWN":
             handleTeardown(request: request)
@@ -214,145 +181,7 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
         }
     }
 
-    private func handlePairSetup(body: Data, cSeq: Int) {
-        guard body.count == 32 else {
-            respondError(cSeq: cSeq, code: 400, message: "Bad Request")
-            return
-        }
-        clientEd25519PublicKey = body
-        sendResponse(
-            status: "200 OK",
-            headers: [
-                "Content-Type": "application/octet-stream",
-                "Content-Length": "32",
-            ],
-            body: identity.publicKeyData,
-            cSeq: cSeq
-        )
-    }
-
-    // swiftlint:disable:next function_body_length
-    private func handlePairVerify(body: Data, cSeq: Int) {
-        if body.count == 68, body.prefix(4) == Data([1, 0, 0, 0]) {
-            let clientECDH = body.subdata(in: 4 ..< 36)
-            let clientEd25519 = body.subdata(in: 36 ..< 68)
-            clientEd25519PublicKey = clientEd25519
-            clientECDHPublicKey = clientECDH
-
-            let ecdhPrivate = Curve25519.KeyAgreement.PrivateKey()
-            let ecdhPublic = ecdhPrivate.publicKey.rawRepresentation
-            ecdhPrivateKey = ecdhPrivate
-            ecdhPublicKeyData = ecdhPublic
-
-            do {
-                let shared = try AirPlayCrypto.sharedSecret(
-                    serverPrivateKey: ecdhPrivate,
-                    clientPublicKeyData: clientECDH
-                )
-                let (aesKey, aesIV) = AirPlayCrypto.derivePairVerifyKeyIV(sharedSecret: shared)
-                let message = ecdhPublic + clientECDH
-                let signature = try identity.signingPrivateKey.signature(for: message)
-                let encryptedSignature = AirPlayCrypto.aesCTR128(data: signature, key: aesKey, iv: aesIV)
-                let responseBody = ecdhPublic + encryptedSignature
-                sendResponse(
-                    status: "200 OK",
-                    headers: [
-                        "Content-Type": "application/octet-stream",
-                        "Content-Length": "\(responseBody.count)",
-                    ],
-                    body: responseBody,
-                    cSeq: cSeq
-                )
-            } catch {
-                AppLogger.error("pair-verify step 1 failed: \(error)", category: .airplay)
-                respondError(cSeq: cSeq, code: 500, message: "Internal Server Error")
-            }
-            return
-        }
-
-        if body.count == 68,
-           body.prefix(4) == Data([0, 0, 0, 0]),
-           let ecdhPrivate = ecdhPrivateKey,
-           let clientECDH = clientECDHPublicKey,
-           let clientEd25519 = clientEd25519PublicKey
-        {
-            let encryptedSignature = body.subdata(in: 4 ..< 68)
-            do {
-                let shared = try AirPlayCrypto.sharedSecret(
-                    serverPrivateKey: ecdhPrivate,
-                    clientPublicKeyData: clientECDH
-                )
-                let (aesKey, aesIV) = AirPlayCrypto.derivePairVerifyKeyIV(sharedSecret: shared)
-                let decrypted = AirPlayCrypto.aesCTR128(data: encryptedSignature, key: aesKey, iv: aesIV)
-                let message = clientECDH + ecdhPrivate.publicKey.rawRepresentation
-                let clientPublicKey = try Curve25519.Signing.PublicKey(rawRepresentation: clientEd25519)
-                let isValid = clientPublicKey.isValidSignature(decrypted, for: message)
-                if !isValid {
-                    AppLogger.warning("pair-verify client signature invalid", category: .airplay)
-                }
-            } catch {
-                AppLogger.error("pair-verify step 2 failed: \(error)", category: .airplay)
-            }
-
-            sendResponse(
-                status: "200 OK",
-                headers: [
-                    "Content-Type": "application/octet-stream",
-                    "Content-Length": "0",
-                ],
-                body: Data(),
-                cSeq: cSeq
-            )
-            return
-        }
-
-        respondOK(cSeq: cSeq, body: Data())
-    }
-
-    private func handleFPSetup(body: Data, cSeq: Int) {
-        let response: Data?
-        switch body.count {
-        case 16:
-            response = AirPlayFairPlaySession.shared.setup(request: body)
-        case 164:
-            response = AirPlayFairPlaySession.shared.handshake(request: body)
-        default:
-            AppLogger.error("Invalid fp-setup body length: \(body.count)", category: .airplay)
-            respondError(cSeq: cSeq, code: 400, message: "Bad Request")
-            return
-        }
-
-        guard let response else {
-            AppLogger.error("fp-setup failed for body length \(body.count)", category: .airplay)
-            respondError(cSeq: cSeq, code: 500, message: "Internal Server Error")
-            return
-        }
-
-        AppLogger.info("fp-setup OK (\(body.count) -> \(response.count) bytes)", category: .airplay)
-        sendResponse(
-            status: "200 OK",
-            headers: [
-                "Content-Type": "application/octet-stream",
-                "Content-Length": "\(response.count)",
-            ],
-            body: response,
-            cSeq: cSeq
-        )
-    }
-
-    private func handlePairPinStart(cSeq: Int) {
-        let pin = Int.random(in: 0 ... 9999)
-        DispatchQueue.main.async {
-            AirPlayPairingState.shared.publishPIN(pin)
-        }
-        respondOK(cSeq: cSeq, body: Data())
-    }
-
-    private func handlePairSetupPin(body _: Data, cSeq: Int) {
-        AppLogger.warning("pair-setup-pin requested but SRP pairing is not implemented yet", category: .airplay)
-        respondError(cSeq: cSeq, code: 501, message: "Not Implemented")
-    }
-
+    /// Answers GET `/info` with TXT or full receiver plist; 500 on serialize failure.
     private func respondInfo(body: Data, headers: [String: String], cSeq: Int) {
         do {
             let contentType = headers["content-type"]
@@ -406,6 +235,7 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
         }
     }
 
+    /// RTSP OPTIONS: advertises supported methods to the phone.
     private func respondOptions(cSeq: Int) {
         sendResponse(
             status: "200 OK",
@@ -418,341 +248,7 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
         )
     }
 
-    private func handleSetup(request: AirPlayHTTPRequest) {
-        let transport = request.headers["transport"] ?? ""
-
-        if transport.contains("event") {
-            let port = AirPlaySessionContext.shared.currentControlPort()
-            sessionIsActive = true
-            AppLogger.info("Event channel SETUP on port \(port)", category: .airplay)
-            sendResponse(
-                status: "200 OK",
-                headers: [
-                    "Session": rtspSessionID,
-                    "Transport": "RTP/AVP/TCP;unicast;interleaved=0-1;mode=event;server_port=\(port);control_port=\(port)",
-                ],
-                body: Data(),
-                cSeq: request.cSeq
-            )
-            return
-        }
-
-        guard !request.body.isEmpty else {
-            respondError(cSeq: request.cSeq, code: 400, message: "Bad Request")
-            return
-        }
-
-        do {
-            let responseBody = try buildSetupResponse(from: request.body)
-            AppLogger.info("SETUP OK (\(responseBody.count) bytes)", category: .airplay)
-            sendResponse(
-                status: "200 OK",
-                headers: [
-                    "Session": rtspSessionID,
-                    "Content-Type": "application/x-apple-binary-plist",
-                    "Content-Length": "\(responseBody.count)",
-                ],
-                body: responseBody,
-                cSeq: request.cSeq
-            )
-        } catch {
-            AppLogger.error("SETUP failed: \(error.localizedDescription)", category: .airplay)
-            respondError(cSeq: request.cSeq, code: 500, message: "Internal Server Error")
-        }
-    }
-
-    // swiftlint:disable:next cyclomatic_complexity function_body_length
-    private func buildSetupResponse(from body: Data) throws -> Data {
-        guard let root = try PropertyListSerialization.propertyList(from: body, format: nil) as? [String: Any] else {
-            throw SetupError.invalidPlist
-        }
-
-        AppLogger.info("SETUP request keys: \(root.keys.sorted())", category: .airplay)
-
-        var response: [String: Any] = [:]
-
-        if let eKey = root["ekey"] as? Data,
-           let eIV = root["eiv"] as? Data,
-           eKey.count == 72,
-           eIV.count == 16
-        {
-            guard let decryptedKey = AirPlayFairPlaySession.shared.decryptKey(eKey) else {
-                throw SetupError.keyDecryptionFailed
-            }
-            aesKey = decryptedKey
-            aesIV = eIV
-            sessionIsActive = true
-            AirPlaySessionContext.shared.activate(controlPort: controlPort)
-            AirPlaySessionContext.shared.configureMirrorStream(aesKey: decryptedKey, streamConnectionID: 0)
-            response["eventPort"] = Int(controlPort)
-            response["timingPort"] = Int(timingPort)
-            AppLogger.info("SETUP keys decrypted (eventPort=\(controlPort), timingPort=\(timingPort))", category: .airplay)
-
-            if let clientTimingPort = plistUInt64(root["timingPort"]).map({ UInt16($0) }), clientTimingPort > 0 {
-                AppLogger.info("SETUP client timingPort=\(clientTimingPort)", category: .airplay)
-                AirPlayTimingServer.shared.start(
-                    connection: connection,
-                    clientTimingPort: clientTimingPort,
-                    localPort: timingPort
-                )
-            }
-            _ = AirPlayMirrorServer.shared.ensureRunning()
-        }
-
-        let streamDicts = setupStreamDictionaries(from: root)
-        if !streamDicts.isEmpty {
-            var responseStreams: [[String: Any]] = []
-            let requestedTypes = streamDicts.compactMap { plistUInt64($0["type"]) }
-            AppLogger.info("SETUP streams types=\(requestedTypes)", category: .airplay)
-
-            for stream in streamDicts {
-                guard let type = plistUInt64(stream["type"]) else { continue }
-
-                if type == 110 {
-                    let mirrorKey = aesKey.isEmpty
-                        ? (AirPlaySessionContext.shared.currentMirrorAESKey() ?? Data())
-                        : aesKey
-                    if let streamID = plistUInt64(stream["streamConnectionID"]) {
-                        streamConnectionID = streamID
-                        AirPlaySessionContext.shared.configureMirrorStream(
-                            aesKey: mirrorKey,
-                            streamConnectionID: streamID
-                        )
-                    }
-
-                    let mirrorPort = AirPlayMirrorServer.shared.ensureRunning()
-                    guard mirrorPort > 0 else {
-                        throw SetupError.mirrorServerUnavailable
-                    }
-
-                    sessionIsActive = true
-                    responseStreams.append([
-                        "dataPort": Int(mirrorPort),
-                        "type": 110,
-                    ])
-                    AppLogger.info(
-                        "Mirroring stream configured on port \(mirrorPort), streamConnectionID=\(streamConnectionID)",
-                        category: .airplay
-                    )
-                } else if type == 96 || type == 103 {
-                    // Realtime (96) or buffered (103) audio. Accept SETUP so media
-                    // playback does not abort the mirror session.
-                    guard let ports = AirPlayAudioServer.shared.ensureRunning() else {
-                        throw SetupError.audioServerUnavailable
-                    }
-
-                    sessionIsActive = true
-                    responseStreams.append([
-                        "dataPort": Int(ports.dataPort),
-                        "controlPort": Int(ports.controlPort),
-                        "type": Int(type),
-                    ])
-                    AppLogger.info(
-                        "Audio stream type=\(type) dataPort=\(ports.dataPort) controlPort=\(ports.controlPort)",
-                        category: .airplay
-                    )
-                } else {
-                    // Unknown stream (often media/audio variants). Still accept with an
-                    // RTP sink so the phone does not tear down the mirror session.
-                    AppLogger.warning("SETUP accepting unknown stream type=\(type) as audio sink", category: .airplay)
-                    guard let ports = AirPlayAudioServer.shared.ensureRunning() else {
-                        throw SetupError.audioServerUnavailable
-                    }
-                    sessionIsActive = true
-                    responseStreams.append([
-                        "dataPort": Int(ports.dataPort),
-                        "controlPort": Int(ports.controlPort),
-                        "type": Int(type),
-                    ])
-                }
-            }
-
-            if !responseStreams.isEmpty {
-                response["streams"] = responseStreams
-            }
-        } else if root["streams"] != nil {
-            AppLogger.warning(
-                "SETUP streams present but unreadable (type=\(String(describing: type(of: root["streams"]!))))",
-                category: .airplay
-            )
-        }
-
-        // Session refresh / no-op SETUP during an active mirror: keep the client alive.
-        if response.isEmpty, sessionIsActive || AirPlaySessionContext.shared.isSessionActive() {
-            response["eventPort"] = Int(AirPlaySessionContext.shared.currentControlPort())
-            response["timingPort"] = Int(timingPort)
-            AppLogger.info("SETUP session refresh (eventPort/timingPort only)", category: .airplay)
-        }
-
-        guard !response.isEmpty else {
-            throw SetupError.emptyResponse
-        }
-
-        return try PropertyListSerialization.data(fromPropertyList: response, format: .binary, options: 0)
-    }
-
-    /// Plist `streams` often fails `as? [[String: Any]]` when nested values vary.
-    private func setupStreamDictionaries(from root: [String: Any]) -> [[String: Any]] {
-        if let streams = root["streams"] as? [[String: Any]] {
-            return streams
-        }
-        guard let items = root["streams"] as? [Any] else { return [] }
-        return items.compactMap { item in
-            if let stream = item as? [String: Any] {
-                return stream
-            }
-            if let stream = item as? [AnyHashable: Any] {
-                var converted: [String: Any] = [:]
-                for (key, value) in stream {
-                    guard let stringKey = key as? String else { continue }
-                    converted[stringKey] = value
-                }
-                return converted.isEmpty ? nil : converted
-            }
-            return nil
-        }
-    }
-
-    private func handleTeardown(request: AirPlayHTTPRequest) {
-        var teardownAudio = false
-        var teardownVideo = false
-
-        if !request.body.isEmpty,
-           let root = try? PropertyListSerialization.propertyList(from: request.body, format: nil) as? [String: Any]
-        {
-            let streams = setupStreamDictionaries(from: root)
-            for stream in streams {
-                guard let type = plistUInt64(stream["type"]) else { continue }
-                if type == 110 {
-                    teardownVideo = true
-                } else {
-                    // 96/103 and other media streams: drop audio sink only.
-                    teardownAudio = true
-                }
-            }
-        }
-
-        AppLogger.info(
-            "TEARDOWN audio=\(teardownAudio) video=\(teardownVideo) body=\(request.body.count)B",
-            category: .airplay
-        )
-        respondOK(cSeq: request.cSeq, body: Data())
-
-        if teardownAudio, !teardownVideo {
-            AirPlayAudioServer.shared.stop()
-            return
-        }
-
-        AirPlayAudioServer.shared.stop()
-        finish()
-    }
-
-    private enum SetupError: LocalizedError {
-        case invalidPlist
-        case keyDecryptionFailed
-        case emptyResponse
-        case mirrorServerUnavailable
-        case audioServerUnavailable
-
-        var errorDescription: String? {
-            switch self {
-            case .invalidPlist: "Invalid SETUP plist"
-            case .keyDecryptionFailed: "FairPlay key decryption failed"
-            case .emptyResponse: "No SETUP response fields"
-            case .mirrorServerUnavailable: "Mirror video server could not start"
-            case .audioServerUnavailable: "Audio RTP sink could not start"
-            }
-        }
-    }
-
-    private func handleGetParameter(request: AirPlayHTTPRequest) {
-        let contentType = request.headers["content-type"] ?? ""
-        guard contentType.contains("text/parameters") else {
-            respondError(cSeq: request.cSeq, code: 451, message: "Parameter not understood")
-            return
-        }
-
-        let bodyText = String(data: request.body, encoding: .utf8) ?? ""
-        if bodyText.contains("volume") {
-            let volumeResponse = "volume: -30.000000\r\n"
-            let body = Data(volumeResponse.utf8)
-            sendResponse(
-                status: "200 OK",
-                headers: [
-                    "Content-Type": "text/parameters",
-                    "Content-Length": "\(body.count)",
-                ],
-                body: body,
-                cSeq: request.cSeq
-            )
-            return
-        }
-
-        respondOK(cSeq: request.cSeq, body: Data())
-    }
-
-    private func plistUInt64(_ value: Any?) -> UInt64? {
-        switch value {
-        case let number as NSNumber:
-            number.uint64Value
-        case let value as UInt64:
-            value
-        case let value as Int:
-            UInt64(value)
-        default:
-            nil
-        }
-    }
-
-    private func handleRecord(cSeq: Int) {
-        sendResponse(
-            status: "200 OK",
-            headers: [
-                "Audio-Latency": "11025",
-                "Audio-Jack-Status": "connected; type=analog",
-            ],
-            body: Data(),
-            cSeq: cSeq
-        )
-        onMirroringStarted?("iPhone")
-        AirPlayMirrorServer.shared.ensureRunning()
-    }
-
-    private func respondOK(cSeq: Int, body: Data) {
-        sendResponse(
-            status: "200 OK",
-            headers: body.isEmpty ? [:] : ["Content-Length": "\(body.count)"],
-            body: body,
-            cSeq: cSeq
-        )
-    }
-
-    private func respondError(cSeq: Int, code: Int, message: String) {
-        sendResponse(status: "\(code) \(message)", headers: [:], body: Data(), cSeq: cSeq)
-    }
-
-    private func sendResponse(status: String, headers: [String: String], body: Data, cSeq: Int) {
-        var response = "RTSP/1.0 \(status)\r\n"
-        response += "Server: AirTunes/366.0\r\n"
-        response += "CSeq: \(cSeq)\r\n"
-        if sessionIsActive || AirPlaySessionContext.shared.isSessionActive() {
-            response += "Session: \(rtspSessionID)\r\n"
-        }
-        for (key, value) in headers {
-            response += "\(key): \(value)\r\n"
-        }
-        response += "\r\n"
-
-        var data = Data(response.utf8)
-        data.append(body)
-
-        connection.send(content: data, completion: .contentProcessed { error in
-            if let error {
-                AppLogger.error("AirPlay response send failed: \(error)", category: .airplay)
-            }
-        })
-    }
-
+    /// Schedules a warning if the connection stays idle after becoming ready.
     private func scheduleIdleLog() {
         let work = DispatchWorkItem { [weak self] in
             guard let self, !self.isFinished, buffer.isEmpty else { return }
@@ -763,12 +259,14 @@ final class AirPlayConnectionHandler: @unchecked Sendable {
         queue.asyncAfter(deadline: .now() + 3, execute: work)
     }
 
+    /// Cancels the pending idle-connection warning timer.
     private func cancelIdleLog() {
         idleTimer?.cancel()
         idleTimer = nil
     }
 
-    private func finish() {
+    /// Ends the session once: notifies observers and cancels the TCP connection.
+    func finish() {
         guard !isFinished else { return }
         isFinished = true
         cancelIdleLog()

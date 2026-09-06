@@ -1,7 +1,9 @@
 import Combine
 import Foundation
 
-/// Shared, persisted phone-frame appearance used by Settings and mirror windows.
+// Observable store so Settings and every mirror window share one frame style.
+// Writes through to AppPreferences on change.
+
 @MainActor
 public final class FrameStyleStore: ObservableObject {
     public static let shared = FrameStyleStore()
@@ -13,6 +15,7 @@ public final class FrameStyleStore: ObservableObject {
         }
     }
 
+    /// Loads the persisted style from AppPreferences onto the main actor.
     private init() {
         style = AppPreferences.frameStyle
     }

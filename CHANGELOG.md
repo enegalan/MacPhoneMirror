@@ -1,5 +1,32 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- AirPlay audio playback: AES-CBC (FairPlay key/IV) + AAC-ELD / AAC-LC / ALAC decode (`ct=8/4/2`)
+- Settings toggle for audio playback
+
+### Changed
+
+- README / FEASIBILITY / SECURITY: pointer taps/drags only; no keyboard shortcuts
+- Pairing guide tab renamed to "Pointer Control"
+- Removed non-functional Camera Control hardware button
+- Stable AirPlay session id; USB unplug tears down mirror session
+- AirPlay session teardown ignores auxiliary sockets; audio configure/stop serialized
+
+### Removed
+
+- `TestPatternReceiver` (production unused; tests use `StubScreenMirrorReceiver`)
+- Diagnostics HUD (UI and preference)
+- Mirror Snapshot (PNG) and Record (MOV) toolbar actions
+- Quick Controls bar and preference
+- Hardware buttons on phone frame (AssistiveTouch-dependent)
+- Legacy AirPlay PIN SRP (`pair-setup-pin`) / OpenSSL dependency
+- PerformanceMonitor / StreamStatistics (unused after Diagnostics HUD removal)
+
+---
+
 ## [1.4] - 2026-09-05
 
 ### Added

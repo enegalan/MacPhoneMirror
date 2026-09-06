@@ -1,8 +1,9 @@
 import CoreBluetooth
 import Foundation
 
-/// HID-over-GATT UUIDs and report map (Bluetooth SIG / USB HID).
-/// Full 128-bit forms required: CoreBluetooth rejects short reserved UUIDs on peripheral.
+// HID-over-GATT UUIDs, report map, and mouse report layout for AssistiveTouch.
+// Full 128-bit UUIDs are required: CoreBluetooth rejects short reserved UUIDs on peripheral.
+
 enum BluetoothHIDProfile {
     // CBUUID is not Sendable; values are immutable once created.
     nonisolated(unsafe) static let batteryService = CBUUID(string: "0000180F-0000-1000-8000-00805F9B34FB")
@@ -43,12 +44,13 @@ enum BluetoothHIDProfile {
         case output = 2
     }
 
+    /// Packs report ID + type for a HID Report Reference descriptor.
     static func reportReference(_ id: ReportID, _ type: ReportType) -> Data {
         Data([id.rawValue, type.rawValue])
     }
 
     /// Absolute mouse (AssistiveTouch) + keyboard + consumer control.
-    /// Absolute X/Y (0…32767) so click-to-position does not depend on relative tracking speed.
+    /// Absolute X/Y (0...32767) so click-to-position does not depend on relative tracking speed.
     static let reportMapData = Data([
         // Absolute mouse — Report ID 1
         0x05, 0x01,
@@ -146,7 +148,7 @@ enum ConsumerUsage: UInt16 {
     case acSearch = 0x0221
 }
 
-/// Absolute mouse report: buttons + X/Y (0…32767 LE) + wheel.
+/// Absolute mouse report: buttons + X/Y (0...32767 LE) + wheel.
 public struct HIDMouseReport: Sendable {
     public static let axisMax: UInt16 = 32767
 
@@ -155,6 +157,7 @@ public struct HIDMouseReport: Sendable {
     public var y: UInt16 = 0
     public var wheel: Int8 = 0
 
+    /// Creates an absolute mouse report with optional button/axis/wheel defaults.
     public init(buttons: UInt8 = 0, x: UInt16 = 0, y: UInt16 = 0, wheel: Int8 = 0) {
         self.buttons = buttons
         self.x = x
@@ -162,6 +165,7 @@ public struct HIDMouseReport: Sendable {
         self.wheel = wheel
     }
 
+    /// Clamps normalized coords to 0...1 and maps them onto the HID absolute axis range.
     public static func fromNormalized(buttons: UInt8, normalizedX: Double, normalizedY: Double, wheel: Int8 = 0) -> HIDMouseReport {
         let nx = min(max(normalizedX, 0), 1)
         let ny = min(max(normalizedY, 0), 1)
@@ -190,6 +194,7 @@ public struct HIDKeyboardReport: Sendable {
     public var reserved: UInt8 = 0
     public var keyCodes: [UInt8] = [0, 0, 0, 0, 0, 0]
 
+    /// Pads or truncates `keyCodes` to the fixed 6-slot boot keyboard layout.
     public init(modifiers: UInt8 = 0, keyCodes: [UInt8] = [0, 0, 0, 0, 0, 0]) {
         self.modifiers = modifiers
         var padded = keyCodes

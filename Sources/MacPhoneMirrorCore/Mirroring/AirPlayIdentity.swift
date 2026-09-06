@@ -3,6 +3,9 @@ import CryptoKit
 import Foundation
 import Network
 
+// Persistent receiver identity (device ID, pairing ID, Ed25519 key) and feature flags.
+// iOS caches pairing against this identity; regenerating it forces re-pair / PIN.
+
 struct AirPlayIdentity {
     let deviceID: String
     let pairingID: String
@@ -28,6 +31,7 @@ struct AirPlayIdentity {
     private static let privateKeyKey = "airplay.privateKey"
     private static let pairingIDKey = "airplay.pairingID"
 
+    /// Loads persisted device/pairing keys or creates and stores a new identity.
     static func loadOrCreate() -> AirPlayIdentity {
         let defaults = UserDefaults.standard
 
@@ -52,6 +56,7 @@ struct AirPlayIdentity {
         return AirPlayIdentity(deviceID: deviceID, pairingID: pairingID, signingPrivateKey: privateKey)
     }
 
+    /// Length-prefixed TXT key=value blob used inside `/info` responses.
     func encodedTXTRecord() -> Data {
         let entries = [
             "deviceid=\(deviceID)",
@@ -80,6 +85,7 @@ struct AirPlayIdentity {
         return data
     }
 
+    /// Binary plist wrapping `txtAirPlay` for qualifier-based GET `/info`.
     func txtAirPlayInfoPlistData() throws -> Data {
         let plist: [String: Any] = [
             "txtAirPlay": encodedTXTRecord(),
@@ -87,6 +93,7 @@ struct AirPlayIdentity {
         return try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0)
     }
 
+    /// Full receiver capability plist (features, displays, keys) for GET `/info` / SETUP merge.
     func fullInfoPlistData() throws -> Data {
         let config = StreamConfiguration.shared
         let size = config.quality.advertisedSize
@@ -136,6 +143,7 @@ public enum AirPlayTXTRecordBuilder {
         }
     }
 
+    /// Builds the Bonjour TXT record advertised on `_airplay._tcp`.
     static func makeRecord(identity: AirPlayIdentity) -> NWTXTRecord {
         var record = NWTXTRecord()
         record["deviceid"] = identity.deviceID
@@ -163,14 +171,17 @@ public final class AirPlayPairingState: ObservableObject, @unchecked Sendable {
     @Published public private(set) var displayPIN: String?
     public private(set) var currentPIN: Int = 0
 
+    /// Private singleton initializer.
     private init() {}
 
+    /// Publishes a zero-padded PIN for the pairing UI.
     public func publishPIN(_ pin: Int) {
         currentPIN = pin
         displayPIN = String(format: "%04d", pin % 10000)
         AppLogger.info("AirPlay PIN displayed: \(displayPIN ?? "")", category: .airplay)
     }
 
+    /// Clears the displayed pairing PIN.
     public func clearPIN() {
         currentPIN = 0
         displayPIN = nil

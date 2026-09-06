@@ -1,6 +1,8 @@
 import MacPhoneMirrorCore
 import SwiftUI
 
+// Colors/materials for the drawn chassis derived from FrameFinish.
+
 public struct FrameThemeColors {
     public let outerBorder: Color
     public let innerBezel: Color
@@ -8,6 +10,7 @@ public struct FrameThemeColors {
 }
 
 public enum FrameTheme {
+    /// Returns border, bezel, and metal-gradient colors for the given chassis finish.
     public static func colors(for finish: FrameFinish) -> FrameThemeColors {
         switch finish {
         case .naturalTitanium:
