@@ -223,6 +223,7 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         service.markListeningStopped()
         NetworkStreamReceiver.shared.stop()
         BluetoothHIDTransport.shared.stopAdvertising()
+        usbCoordinator.stop()
         disconnect()
         setState(.disconnected)
         AppLogger.info("AirPlay service disabled by user", category: .session)

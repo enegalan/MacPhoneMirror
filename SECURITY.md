@@ -6,7 +6,8 @@ MacPhoneMirror is engineered around privacy and system integrity.
 
 ### 1. Platform & API Guarantees
 * **No Jailbreaks**: MacPhoneMirror requires no jailbreaking, modified iOS kernels, or unauthorized system hooks.
-* **No Private APIs**: MacPhoneMirror utilizes only documented, public Apple frameworks (`AVFoundation`, `VideoToolbox`, `Metal`, `Network`, `CoreBluetooth`, `AppKit`, `SwiftUI`).
+* **Public Apple frameworks**: Video capture, decode, render, networking, and HID use documented public APIs (`AVFoundation`, `VideoToolbox`, `Metal`, `Network`, `CoreBluetooth`, `AppKit`, `SwiftUI`).
+* **FairPlay exception**: Unmanaged AirPlay Screen Mirroring also requires a repository-local, UxPlay-derived FairPlay implementation under `Sources/CAirPlayFairPlay` (Swift entry point: `AirPlayFairPlaySession.swift`). This is **not** an Apple public API and may affect App Store / notarization distribution options.
 * **Zero Cloud Dependence**: All video decoding, coordinate mapping, and Bluetooth communications are processed entirely locally on your Mac. No video, audio, keystrokes, or screen contents leave your local device.
 
 ### 2. Permissions Policy

@@ -25,13 +25,24 @@ extension AirPlayConnectionHandler {
     }
 
     /// pair-verify: ECDH + AES-CTR signed exchange (step 1 request, step 2 confirm).
-    /// Step 1 failure → 500; malformed bodies fall through to empty 200.
+    /// Requires an existing pair-setup key; invalid crypto/signature → authentication failure.
     // swiftlint:disable:next function_body_length
     func handlePairVerify(body: Data, cSeq: Int) {
         if body.count == 68, body.prefix(4) == Data([1, 0, 0, 0]) {
+            guard let pairSetupKey = clientEd25519PublicKey, pairSetupKey.count == 32 else {
+                AppLogger.warning("pair-verify step 1 rejected: missing pair-setup key", category: .airplay)
+                respondError(cSeq: cSeq, code: 403, message: "Forbidden")
+                return
+            }
+
             let clientECDH = body.subdata(in: 4 ..< 36)
-            let clientEd25519 = body.subdata(in: 36 ..< 68)
-            clientEd25519PublicKey = clientEd25519
+            let claimedEd25519 = body.subdata(in: 36 ..< 68)
+            guard claimedEd25519 == pairSetupKey else {
+                AppLogger.warning("pair-verify step 1 rejected: Ed25519 key mismatch", category: .airplay)
+                respondError(cSeq: cSeq, code: 403, message: "Forbidden")
+                return
+            }
+
             clientECDHPublicKey = clientECDH
 
             let ecdhPrivate = Curve25519.KeyAgreement.PrivateKey()
@@ -60,7 +71,7 @@ extension AirPlayConnectionHandler {
                 )
             } catch {
                 AppLogger.error("pair-verify step 1 failed: \(error)", category: .airplay)
-                respondError(cSeq: cSeq, code: 500, message: "Internal Server Error")
+                respondError(cSeq: cSeq, code: 403, message: "Forbidden")
             }
             return
         }
@@ -82,26 +93,28 @@ extension AirPlayConnectionHandler {
                 let message = clientECDH + ecdhPrivate.publicKey.rawRepresentation
                 let clientPublicKey = try Curve25519.Signing.PublicKey(rawRepresentation: clientEd25519)
                 let isValid = clientPublicKey.isValidSignature(decrypted, for: message)
-                if !isValid {
+                guard isValid else {
                     AppLogger.warning("pair-verify client signature invalid", category: .airplay)
+                    respondError(cSeq: cSeq, code: 403, message: "Forbidden")
+                    return
                 }
+                sendResponse(
+                    status: "200 OK",
+                    headers: [
+                        "Content-Type": "application/octet-stream",
+                        "Content-Length": "0",
+                    ],
+                    body: Data(),
+                    cSeq: cSeq
+                )
             } catch {
                 AppLogger.error("pair-verify step 2 failed: \(error)", category: .airplay)
+                respondError(cSeq: cSeq, code: 403, message: "Forbidden")
             }
-
-            sendResponse(
-                status: "200 OK",
-                headers: [
-                    "Content-Type": "application/octet-stream",
-                    "Content-Length": "0",
-                ],
-                body: Data(),
-                cSeq: cSeq
-            )
             return
         }
 
-        respondOK(cSeq: cSeq, body: Data())
+        respondError(cSeq: cSeq, code: 403, message: "Forbidden")
     }
 
     /// `/fp-setup`: FairPlay setup (16B) or handshake (164B) for encrypted mirroring.

@@ -45,9 +45,11 @@ extension BluetoothHIDTransport {
     func clickLeft() async throws {
         let down = setButton(.left, pressed: true)
         transmitMouseReport(currentAbsoluteReport(buttons: down))
+        defer {
+            let up = setButton(.left, pressed: false)
+            transmitMouseReport(currentAbsoluteReport(buttons: up))
+        }
         try await Task.sleep(nanoseconds: 40_000_000)
-        let up = setButton(.left, pressed: false)
-        transmitMouseReport(currentAbsoluteReport(buttons: up))
     }
 
     /// Synthesizes a directional swipe via a short absolute drag path.
@@ -84,6 +86,10 @@ extension BluetoothHIDTransport {
         try await Task.sleep(nanoseconds: 20_000_000)
         let down = setButton(.left, pressed: true)
         transmitMouseReport(currentAbsoluteReport(buttons: down))
+        defer {
+            let up = setButton(.left, pressed: false)
+            transmitMouseReport(currentAbsoluteReport(buttons: up))
+        }
         try await Task.sleep(nanoseconds: 30_000_000)
 
         for index in 1 ... count {
@@ -97,22 +103,23 @@ extension BluetoothHIDTransport {
         if holdAtEndNs > 0 {
             try await Task.sleep(nanoseconds: holdAtEndNs)
         }
-
-        let up = setButton(.left, pressed: false)
-        transmitMouseReport(currentAbsoluteReport(buttons: up))
     }
 
     /// Sends a key-down then immediate key-up chord for a single HID usage.
     func sendKeyChord(modifiers: UInt8, keyCode: UInt8) async throws {
         transmitKeyboardReport(HIDKeyboardReport(modifiers: modifiers, keyCodes: [keyCode]))
+        defer {
+            transmitKeyboardReport(HIDKeyboardReport(modifiers: 0, keyCodes: []))
+        }
         try await Task.sleep(nanoseconds: HIDTiming.shortGapNs)
-        transmitKeyboardReport(HIDKeyboardReport(modifiers: 0, keyCodes: []))
     }
 
     /// Pulses a consumer-control usage (press then release to 0).
     func sendConsumerPulse(_ usage: ConsumerUsage) async throws {
         transmitConsumerReport(usage.rawValue)
+        defer {
+            transmitConsumerReport(0)
+        }
         try await Task.sleep(nanoseconds: HIDTiming.shortGapNs)
-        transmitConsumerReport(0)
     }
 }

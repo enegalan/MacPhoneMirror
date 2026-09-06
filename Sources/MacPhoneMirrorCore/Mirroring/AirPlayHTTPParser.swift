@@ -40,7 +40,15 @@ enum AirPlayHTTPParser {
         }
 
         let contentLength = Int(headers["content-length"] ?? "0") ?? 0
+        guard contentLength >= 0 else {
+            buffer.removeAll()
+            return nil
+        }
         let bodyStart = headerEnd.upperBound
+        guard contentLength <= Int.max - bodyStart else {
+            buffer.removeAll()
+            return nil
+        }
         let totalLength = bodyStart + contentLength
         guard buffer.count >= totalLength else { return nil }
 

@@ -19,7 +19,7 @@ public enum SystemPermission: String, CaseIterable, Identifiable, Sendable {
         case .localNetwork:
             "Required to advertise the AirPlay receiver and accept Screen Mirroring on your local Wi-Fi network."
         case .bluetooth:
-            "Required to pair \(AppInfo.displayName) as a Bluetooth HID device for mouse and keyboard control."
+            "Required to pair \(AppInfo.displayName) as a Bluetooth HID device for pointer and mouse control."
         }
     }
 }

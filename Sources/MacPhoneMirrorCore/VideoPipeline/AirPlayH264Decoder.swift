@@ -291,12 +291,12 @@ final class AirPlayH264Decoder: @unchecked Sendable {
     }
 
     /// Parses hvcC arrays into VPS/SPS/PPS NALs.
-    private func parseHVCC(_ hvcc: Data) -> [Data]? {
+    func parseHVCC(_ hvcc: Data) -> [Data]? {
         // hvcc payload starts at configurationVersion (after fourcc already stripped by caller).
         let bytes = [UInt8](hvcc)
-        guard bytes.count > 23, bytes[0] == 1 else { return nil }
+        guard bytes.count > 22, bytes[0] == 1 else { return nil }
 
-        var offset = 23 // configurationVersion through lengthSizeMinusOne
+        var offset = 22 // configurationVersion through lengthSizeMinusOne; numOfArrays at byte 22
         guard offset < bytes.count else { return nil }
         let numArrays = Int(bytes[offset])
         offset += 1

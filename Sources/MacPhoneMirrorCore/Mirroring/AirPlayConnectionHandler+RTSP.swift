@@ -97,7 +97,7 @@ extension AirPlayConnectionHandler {
                 }
             }
 
-            if let clientTimingPort = plistUInt64(root["timingPort"]).map({ UInt16($0) }), clientTimingPort > 0 {
+            if let clientTimingPort = plistUInt16(root["timingPort"]), clientTimingPort > 0 {
                 AppLogger.info("SETUP client timingPort=\(clientTimingPort)", category: .airplay)
                 AirPlayTimingServer.shared.start(
                     connection: connection,
@@ -182,7 +182,7 @@ extension AirPlayConnectionHandler {
                         : aesIV
                     audioConfig.aesKey = sessionKey
                     audioConfig.aesIV = sessionIV
-                    AirPlayAudioServer.shared.configurePlayback(audioConfig)
+                    AirPlayAudioServer.shared.configurePlayback(audioConfig, peerConnection: connection)
 
                     sessionIsActive = true
                     responseStreams.append([
@@ -199,7 +199,11 @@ extension AirPlayConnectionHandler {
                 } else {
                     // Unknown stream (often media/audio variants). Still accept with an
                     // RTP sink so the phone does not tear down the mirror session.
-                    AppLogger.warning("SETUP accepting unknown stream type=\(type) as audio sink", category: .airplay)
+                    guard let responseType = Int(exactly: type) else { continue }
+                    AppLogger.warning(
+                        "SETUP accepting unknown stream type=\(responseType) as audio sink",
+                        category: .airplay
+                    )
                     guard let ports = AirPlayAudioServer.shared.ensureRunning() else {
                         throw SetupError.audioServerUnavailable
                     }
@@ -207,7 +211,7 @@ extension AirPlayConnectionHandler {
                     responseStreams.append([
                         "dataPort": Int(ports.dataPort),
                         "controlPort": Int(ports.controlPort),
-                        "type": Int(type),
+                        "type": responseType,
                     ])
                 }
             }
@@ -350,6 +354,12 @@ extension AirPlayConnectionHandler {
         default:
             nil
         }
+    }
+
+    /// Coerces plist numerics to UInt16 only when the value fits without truncation.
+    func plistUInt16(_ value: Any?) -> UInt16? {
+        guard let value = plistUInt64(value), value <= UInt64(UInt16.max) else { return nil }
+        return UInt16(value)
     }
 
     /// RTSP RECORD: ACK with audio latency headers and ensure the mirror TCP listener is up.

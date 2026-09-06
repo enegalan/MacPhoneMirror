@@ -105,6 +105,9 @@ extension BluetoothHIDTransport: CBPeripheralManagerDelegate {
     ) {
         lock.lock()
         subscribedCentrals[central.identifier] = central
+        var chars = subscribedCharacteristicIDs[central.identifier] ?? []
+        chars.insert(characteristic.uuid)
+        subscribedCharacteristicIDs[central.identifier] = chars
         subscribedCentralIDs.insert(central.identifier)
         let mouse = cachedMouse
         let keyboard = cachedKeyboard
@@ -137,8 +140,15 @@ extension BluetoothHIDTransport: CBPeripheralManagerDelegate {
         didUnsubscribeFrom characteristic: CBCharacteristic
     ) {
         lock.lock()
-        subscribedCentrals.removeValue(forKey: central.identifier)
-        subscribedCentralIDs.remove(central.identifier)
+        var chars = subscribedCharacteristicIDs[central.identifier] ?? []
+        chars.remove(characteristic.uuid)
+        if chars.isEmpty {
+            subscribedCharacteristicIDs.removeValue(forKey: central.identifier)
+            subscribedCentrals.removeValue(forKey: central.identifier)
+            subscribedCentralIDs.remove(central.identifier)
+        } else {
+            subscribedCharacteristicIDs[central.identifier] = chars
+        }
         lock.unlock()
         AppLogger.info("iPhone unsubscribed from \(characteristic.uuid)", category: .bluetooth)
     }

@@ -42,6 +42,7 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
     var pendingNotifyQueues: [ObjectIdentifier: [Data]] = [:]
     var pendingNotifyCharacteristics: [ObjectIdentifier: CBMutableCharacteristic] = [:]
     var subscribedCentrals: [UUID: CBCentral] = [:]
+    var subscribedCharacteristicIDs: [UUID: Set<CBUUID>] = [:]
     var subscribedCentralIDs: Set<UUID> = []
     var cachedMouse = Data([0, 0, 0, 0, 0, 0])
     var cachedKeyboard = Data([0, 0, 0, 0, 0, 0, 0, 0])
@@ -305,19 +306,20 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
         AppLogger.debug("HID consumer: 0x\(String(usage, radix: 16))", category: .input)
     }
 
-    /// Pushes `data` to subscribed centrals, or queues it when the peripheral is not ready.
+    /// Pushes `data` via CoreBluetooth’s per-characteristic subscriber set, or queues when not ready.
     func notify(_ data: Data, characteristic: CBMutableCharacteristic?) {
         guard let characteristic, let peripheralManager else { return }
         queue.async { [weak self] in
             guard let self else { return }
-            let centrals = lock.withLock { Array(self.subscribedCentrals.values) }
-            guard !centrals.isEmpty else { return }
+            let hasSubscribers = lock.withLock { !self.subscribedCentralIDs.isEmpty }
+            guard hasSubscribers else { return }
 
             if !readyToNotify {
                 enqueuePendingNotify(data, characteristic: characteristic)
                 return
             }
-            let ok = peripheralManager.updateValue(data, for: characteristic, onSubscribedCentrals: centrals)
+            // nil → CoreBluetooth notifies only centrals subscribed to this characteristic.
+            let ok = peripheralManager.updateValue(data, for: characteristic, onSubscribedCentrals: nil)
             if !ok {
                 readyToNotify = false
                 enqueuePendingNotify(data, characteristic: characteristic)
@@ -336,8 +338,8 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
 
     /// Flushes queued notify payloads until the peripheral back-pressures again.
     func drainPendingNotifications(using peripheralManager: CBPeripheralManager) {
-        let centrals = lock.withLock { Array(subscribedCentrals.values) }
-        guard !centrals.isEmpty else {
+        let hasSubscribers = lock.withLock { !subscribedCentralIDs.isEmpty }
+        guard hasSubscribers else {
             pendingNotifyQueues.removeAll()
             pendingNotifyCharacteristics.removeAll()
             return
@@ -354,7 +356,7 @@ public final class BluetoothHIDTransport: NSObject, PhoneInputTransport, @unchec
                     continue
                 }
                 let data = queue.removeFirst()
-                let ok = peripheralManager.updateValue(data, for: characteristic, onSubscribedCentrals: centrals)
+                let ok = peripheralManager.updateValue(data, for: characteristic, onSubscribedCentrals: nil)
                 if ok {
                     sentAny = true
                     if queue.isEmpty {

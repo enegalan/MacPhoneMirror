@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import Network
 
 // UDP listeners for AirPlay realtime/buffered audio RTP/RTCP.
 // Ports are advertised during RTSP SETUP; playback is delegated to AirPlayAudioPlayback.
@@ -17,6 +18,10 @@ final class AirPlayAudioServer: @unchecked Sendable {
     private var controlPort: UInt16 = 0
     private var isRunning = false
     private var didLogFirstData = false
+    private var expectedPeer = sockaddr_storage()
+    private var expectedPeerLength: socklen_t = 0
+    private var hasExpectedPeer = false
+    private var hasCryptoMaterial = false
 
     /// Private singleton initializer.
     private init() {}
@@ -32,9 +37,12 @@ final class AirPlayAudioServer: @unchecked Sendable {
         }
     }
 
-    /// Forwards RTSP SETUP audio crypto/format into the playback pipeline.
-    func configurePlayback(_ config: AirPlayAudioPlayback.StreamConfig) {
+    /// Forwards RTSP SETUP audio crypto/format into the playback pipeline and binds the RTSP peer.
+    func configurePlayback(_ config: AirPlayAudioPlayback.StreamConfig, peerConnection: NWConnection) {
         queue.sync {
+            hasCryptoMaterial = config.sharedKey.count >= 32
+                || (config.aesKey.count == 16 && config.aesIV.count == 16)
+            setExpectedPeerLocked(from: peerConnection)
             playback.configure(config)
         }
     }
@@ -90,6 +98,90 @@ final class AirPlayAudioServer: @unchecked Sendable {
         controlPort = 0
         isRunning = false
         didLogFirstData = false
+        hasExpectedPeer = false
+        expectedPeerLength = 0
+        expectedPeer = sockaddr_storage()
+        hasCryptoMaterial = false
+    }
+
+    /// Remembers the RTSP TCP peer so UDP datagrams from other hosts are dropped.
+    private func setExpectedPeerLocked(from connection: NWConnection) {
+        hasExpectedPeer = false
+        expectedPeerLength = 0
+        expectedPeer = sockaddr_storage()
+
+        let endpoint = connection.currentPath?.remoteEndpoint ?? connection.endpoint
+        guard case let .hostPort(host, _) = endpoint else { return }
+
+        var hints = addrinfo()
+        hints.ai_family = AF_UNSPEC
+        hints.ai_socktype = SOCK_DGRAM
+        hints.ai_flags = AI_NUMERICHOST
+
+        let hostText: String
+        switch host {
+        case let .ipv4(address):
+            hostText = "\(address)"
+        case let .ipv6(address):
+            hostText = "\(address)"
+        default:
+            return
+        }
+
+        var result: UnsafeMutablePointer<addrinfo>?
+        let status = getaddrinfo(hostText, "0", &hints, &result)
+        guard status == 0, let info = result else { return }
+        defer { freeaddrinfo(result) }
+        guard info.pointee.ai_addrlen <= MemoryLayout<sockaddr_storage>.size else { return }
+
+        expectedPeerLength = info.pointee.ai_addrlen
+        _ = withUnsafeMutablePointer(to: &expectedPeer) { storage in
+            memcpy(storage, info.pointee.ai_addr, Int(expectedPeerLength))
+        }
+        hasExpectedPeer = true
+    }
+
+    /// True when `candidate` matches the negotiated peer address (port ignored).
+    private func matchesExpectedPeer(_ candidate: sockaddr_storage, length: socklen_t) -> Bool {
+        guard hasExpectedPeer else { return false }
+
+        if expectedPeer.ss_family == sa_family_t(AF_INET),
+           candidate.ss_family == sa_family_t(AF_INET),
+           length >= socklen_t(MemoryLayout<sockaddr_in>.size)
+        {
+            return withUnsafePointer(to: expectedPeer) { expectedPtr in
+                withUnsafePointer(to: candidate) { candidatePtr in
+                    expectedPtr.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { expected in
+                        candidatePtr.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { remote in
+                            expected.pointee.sin_addr.s_addr == remote.pointee.sin_addr.s_addr
+                        }
+                    }
+                }
+            }
+        }
+
+        if expectedPeer.ss_family == sa_family_t(AF_INET6),
+           candidate.ss_family == sa_family_t(AF_INET6),
+           length >= socklen_t(MemoryLayout<sockaddr_in6>.size)
+        {
+            return withUnsafePointer(to: expectedPeer) { expectedPtr in
+                withUnsafePointer(to: candidate) { candidatePtr in
+                    expectedPtr.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) { expected in
+                        candidatePtr.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) { remote in
+                            var expectedAddr = expected.pointee.sin6_addr
+                            var remoteAddr = remote.pointee.sin6_addr
+                            return memcmp(
+                                &expectedAddr,
+                                &remoteAddr,
+                                MemoryLayout<in6_addr>.size
+                            ) == 0
+                        }
+                    }
+                }
+            }
+        }
+
+        return false
     }
 
     /// Creates an IPv6 dual-stack UDP socket bound to an ephemeral port.
@@ -152,15 +244,25 @@ final class AirPlayAudioServer: @unchecked Sendable {
         return source
     }
 
-    /// Non-blocking recv loop; forwards data-port RTP into `AirPlayAudioPlayback`.
+    /// Non-blocking recvfrom loop; forwards authenticated peer RTP into `AirPlayAudioPlayback`.
     private func drain(fd: Int32, label: String) {
         var buffer = [UInt8](repeating: 0, count: 4096)
         while true {
-            let received = recv(fd, &buffer, buffer.count, Int32(MSG_DONTWAIT))
+            var sourceAddress = sockaddr_storage()
+            var sourceLength = socklen_t(MemoryLayout<sockaddr_storage>.size)
+            let received = withUnsafeMutablePointer(to: &sourceAddress) { addrPtr in
+                addrPtr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockAddr in
+                    recvfrom(fd, &buffer, buffer.count, Int32(MSG_DONTWAIT), sockAddr, &sourceLength)
+                }
+            }
             if received <= 0 {
                 break
             }
             if label == "data" {
+                guard hasExpectedPeer, matchesExpectedPeer(sourceAddress, length: sourceLength) else {
+                    continue
+                }
+                guard hasCryptoMaterial else { continue }
                 let packet = Data(buffer.prefix(received))
                 if !didLogFirstData {
                     didLogFirstData = true

@@ -84,12 +84,12 @@ MacPhoneMirror is a native macOS application designed to provide low-latency iPh
 | Capability | Technical Mechanism | Public API? | Latency | Status in MacPhoneMirror |
 | :--- | :--- | :--- | :--- | :--- |
 | **USB Screen Mirroring** | AVFoundation `AVCaptureSession` | Yes | < 10 ms | Fully Implemented |
-| **AirPlay Receiver** | `Network.framework` Bonjour + RTSP | Yes* | < 5 ms discovery | Fully Implemented |
+| **AirPlay Receiver** | `Network.framework` Bonjour + RTSP + local FairPlay | No† | < 5 ms discovery | Fully Implemented |
 | **Hardware Video Decode** | VideoToolbox H.264 / HEVC | Yes | ~2–3 ms | Fully Implemented |
 | **GPU Metal Render** | Metal + `CVMetalTextureCache` | Yes | ~1–2 ms | Fully Implemented |
 | **Pointer Control** | Bluetooth HID + AssistiveTouch taps/drags | Yes | ~12–18 ms | Fully Implemented |
 | **Keyboard / Shortcuts** | — | — | — | **Not supported** (by design) |
-| **AirPlay Audio Playback** | RTP + AES-CBC / ChaChaPoly + AAC-ELD / AAC-LC / ALAC | Yes* | variable | Implemented |
+| **AirPlay Audio Playback** | RTP + AES-CBC / ChaChaPoly + AAC-ELD / AAC-LC / ALAC | Partial† | variable | Implemented |
 | **Device Framing** | SwiftUI Vector + Squircle Clipping | Yes | Zero lag | Fully Implemented |
 
-\* AirPlay receiver crypto/session details rely on documented public frameworks plus FairPlay helpers required for unmanaged Screen Mirroring.
+† Bonjour/RTSP use public `Network.framework`, but encrypted Screen Mirroring depends on a repository-local, UxPlay-derived FairPlay implementation (`Sources/CAirPlayFairPlay`, wrapped by `AirPlayFairPlaySession.swift`). That code is not an Apple public API and carries distribution / App Store compliance risk.

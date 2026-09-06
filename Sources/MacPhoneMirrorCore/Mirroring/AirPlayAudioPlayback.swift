@@ -43,6 +43,13 @@ final class AirPlayAudioPlayback: @unchecked Sendable {
             didLogDecodeFail = false
             didLogFirstAudio = false
             framesPlayed = 0
+            guard AppPreferences.enableAudioPlayback else {
+                AppLogger.info(
+                    "Audio playback configure skipped (disabled) ct=\(config.compressionType)",
+                    category: .airplay
+                )
+                return
+            }
             prepareFormatsLocked()
             rebuildEngineLocked()
             AppLogger.info(
@@ -70,15 +77,22 @@ final class AirPlayAudioPlayback: @unchecked Sendable {
 
     /// Queues one RTP packet for decrypt/decode when audio playback is enabled.
     func ingestRTPPacket(_ packet: Data) {
-        guard AppPreferences.enableAudioPlayback else { return }
         queue.async { [weak self] in
-            self?.handlePacketLocked(packet)
+            guard let self else { return }
+            guard AppPreferences.enableAudioPlayback else {
+                if engine != nil || player != nil {
+                    teardownLocked()
+                }
+                return
+            }
+            handlePacketLocked(packet)
         }
     }
 
     /// Decrypts and plays one RTP payload; drops markers, duplicates, and decode failures.
     private func handlePacketLocked(_ packet: Data) {
         guard packet.count >= 12 else { return }
+        guard hasCryptoMaterial else { return }
 
         // Skip AAC-ELD "no data" markers (12-byte header only, or 16 with marker payload).
         if packet.count == 12 {
@@ -90,7 +104,14 @@ final class AirPlayAudioPlayback: @unchecked Sendable {
 
         let header = Data(packet.prefix(12))
         let seq = UInt16(header[2]) << 8 | UInt16(header[3])
+        let payload = Data(packet.dropFirst(12))
+        guard let plaintext = decryptPayload(payload, rtpHeader: header), !plaintext.isEmpty else { return }
+        if plaintext == Self.noDataMarker {
+            return
+        }
+
         // AAC-ELD retransmit window requires strict forward-only acceptance.
+        // Update only after authenticated decrypt so forged packets cannot advance the window.
         if config.compressionType == 8 {
             if let last = lastPlayedSeq {
                 let delta = Self.sequenceDelta(seq, from: last)
@@ -99,12 +120,6 @@ final class AirPlayAudioPlayback: @unchecked Sendable {
                 }
             }
             lastPlayedSeq = seq
-        }
-
-        let payload = Data(packet.dropFirst(12))
-        guard let plaintext = decryptPayload(payload, rtpHeader: header), !plaintext.isEmpty else { return }
-        if plaintext == Self.noDataMarker {
-            return
         }
 
         switch config.compressionType {
@@ -137,7 +152,12 @@ final class AirPlayAudioPlayback: @unchecked Sendable {
         return delta
     }
 
-    /// Chooses ChaCha20-Poly1305, AES-CBC, or passthrough based on SETUP keys.
+    private var hasCryptoMaterial: Bool {
+        config.sharedKey.count >= 32
+            || (config.aesKey.count == 16 && config.aesIV.count == 16)
+    }
+
+    /// Chooses ChaCha20-Poly1305 or AES-CBC based on SETUP keys. Never treats plaintext as authenticated.
     private func decryptPayload(_ payload: Data, rtpHeader: Data) -> Data? {
         if config.sharedKey.count >= 32 {
             return decryptChaChaPoly(payload: payload, rtpHeader: rtpHeader)
@@ -145,7 +165,7 @@ final class AirPlayAudioPlayback: @unchecked Sendable {
         if config.aesKey.count == 16, config.aesIV.count == 16, payload.count >= 16 {
             return decryptAESCBC(payload)
         }
-        return payload
+        return nil
     }
 
     /// FairPlay AES-CBC decrypt for screen-mirroring AAC-ELD; nil on CCCrypt failure.
@@ -463,6 +483,10 @@ final class AirPlayAudioPlayback: @unchecked Sendable {
 
     /// Lazily rebuilds formats/engine if playback nodes were torn down.
     private func ensureEngine() {
+        guard AppPreferences.enableAudioPlayback else {
+            teardownEngineOnlyLocked()
+            return
+        }
         if engine == nil || player == nil {
             if pcmFormat == nil {
                 prepareFormatsLocked()

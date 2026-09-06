@@ -11,11 +11,15 @@ final class MirrorStreamSession: @unchecked Sendable {
         case binary
     }
 
+    private static let maxHandshakeHeaderBytes = 16_384
+    private static let maxPlistBodyBytes = 1_048_576
+
     private let socketFD: Int32
     private let decryptor = AirPlayMirrorDecryptor()
     private let decoder: AirPlayH264Decoder
     private let onStreamStarted: () -> Void
     private let onEnded: (MirrorStreamSession) -> Void
+    private let stopLock = NSLock()
 
     private var buffer = Data()
     private var mode: Mode = .handshake
@@ -23,9 +27,10 @@ final class MirrorStreamSession: @unchecked Sendable {
     private var didNotifyStreamStart = false
     private var didLogInvalidPayload = false
     private var packetCount = 0
-    private var shouldStop = false
+    private var _shouldStop = false
     private var didLogWaiting = false
     private var hasReceivedData = false
+    private var lastReceiveDate = Date()
 
     /// Opens a mirror TCP session with SETUP-derived stream keys for decrypt.
     init(
@@ -52,8 +57,16 @@ final class MirrorStreamSession: @unchecked Sendable {
 
     /// Requests shutdown and SHUT_RDWR on the client socket.
     func stop() {
-        shouldStop = true
+        stopLock.lock()
+        _shouldStop = true
+        stopLock.unlock()
         shutdown(socketFD, SHUT_RDWR)
+    }
+
+    private var shouldStop: Bool {
+        stopLock.lock()
+        defer { stopLock.unlock() }
+        return _shouldStop
     }
 
     /// Reads handshake then encrypted NALU packets until idle timeout, EOF, or error.
@@ -64,9 +77,8 @@ final class MirrorStreamSession: @unchecked Sendable {
             onEnded(self)
         }
 
-        // Wall-clock idle limit (not recv iteration count): with O_NONBLOCK,
-        // thousands of loops finish in ms and close the peer too early.
-        let idleDeadline = Date().addingTimeInterval(AirPlayTiming.mirrorStreamIdleSeconds)
+        let idleInterval = AirPlayTiming.mirrorStreamIdleSeconds
+        lastReceiveDate = Date()
         var chunk = [UInt8](repeating: 0, count: 65536)
 
         while !shouldStop {
@@ -74,13 +86,16 @@ final class MirrorStreamSession: @unchecked Sendable {
 
             if received > 0 {
                 hasReceivedData = true
+                lastReceiveDate = Date()
                 if buffer.isEmpty, packetCount == 0 {
                     let preview = chunk.prefix(min(received, 24))
                         .map { String(format: "%02x", $0) }
                         .joined(separator: " ")
                     AppLogger.info("Mirror stream first bytes (\(received)B): \(preview)", category: .airplay)
                 }
-                buffer.append(contentsOf: chunk.prefix(received))
+                if !appendIncoming(chunk.prefix(received)) {
+                    return
+                }
                 processBuffer()
                 continue
             }
@@ -91,15 +106,13 @@ final class MirrorStreamSession: @unchecked Sendable {
             }
 
             if errno == EAGAIN || errno == EWOULDBLOCK {
-                if !hasReceivedData {
-                    if !didLogWaiting {
-                        didLogWaiting = true
-                        AppLogger.info("Mirror stream connected, waiting for video data...", category: .airplay)
-                    }
-                    if Date() > idleDeadline {
-                        AppLogger.warning("Mirror stream timeout waiting for data (30s)", category: .airplay)
-                        return
-                    }
+                if !hasReceivedData, !didLogWaiting {
+                    didLogWaiting = true
+                    AppLogger.info("Mirror stream connected, waiting for video data...", category: .airplay)
+                }
+                if Date().timeIntervalSince(lastReceiveDate) > idleInterval {
+                    AppLogger.warning("Mirror stream idle timeout (\(Int(idleInterval))s)", category: .airplay)
+                    return
                 }
                 continue
             }
@@ -107,6 +120,28 @@ final class MirrorStreamSession: @unchecked Sendable {
             AppLogger.warning("Mirror stream recv failed errno=\(errno)", category: .airplay)
             return
         }
+    }
+
+    /// Appends bytes with handshake/plist size limits; returns false when the session must end.
+    private func appendIncoming(_ chunk: ArraySlice<UInt8>) -> Bool {
+        switch mode {
+        case .handshake:
+            if buffer.count + chunk.count > Self.maxHandshakeHeaderBytes,
+               buffer.range(of: Data("\r\n\r\n".utf8)) == nil
+            {
+                AppLogger.warning("Mirror stream handshake header exceeded limit", category: .airplay)
+                return false
+            }
+        case let .skipPlistBody(totalLength):
+            if totalLength > Self.maxPlistBodyBytes {
+                AppLogger.warning("Mirror stream plist body exceeded limit", category: .airplay)
+                return false
+            }
+        case .binary:
+            break
+        }
+        buffer.append(contentsOf: chunk)
+        return true
     }
 
     /// Advances handshake/plist-skip/binary modes as bytes arrive.
@@ -136,9 +171,21 @@ final class MirrorStreamSession: @unchecked Sendable {
 
                     if headerText.hasPrefix("POST /stream") {
                         let contentLength = Int(headers["content-length"] ?? "0") ?? 0
+                        guard contentLength >= 0, contentLength <= Self.maxPlistBodyBytes else {
+                            AppLogger.warning(
+                                "Mirror stream rejected plist Content-Length=\(contentLength)",
+                                category: .airplay
+                            )
+                            buffer.removeAll()
+                            stop()
+                            return
+                        }
                         respondStreamOK()
                         buffer.removeSubrange(..<headerEnd.upperBound)
-                        AppLogger.info("Mirror stream POST /stream received, plist body length=\(contentLength)", category: .airplay)
+                        AppLogger.info(
+                            "Mirror stream POST /stream received, plist body length=\(contentLength)",
+                            category: .airplay
+                        )
                         if contentLength > 0 {
                             mode = .skipPlistBody(totalLength: contentLength)
                             continue
@@ -154,6 +201,12 @@ final class MirrorStreamSession: @unchecked Sendable {
                     )
                     buffer.removeSubrange(..<headerEnd.upperBound)
                     continue
+                }
+
+                if buffer.count > Self.maxHandshakeHeaderBytes {
+                    AppLogger.warning("Mirror stream handshake buffer exceeded limit", category: .airplay)
+                    stop()
+                    return
                 }
 
                 if buffer.count >= 128, !looksLikeHTTPRequest(buffer), looksLikeMirrorBinaryHeader(buffer) {

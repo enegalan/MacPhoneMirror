@@ -70,6 +70,22 @@ struct AirPlayHTTPParserTests {
         #expect(buffer.isEmpty)
     }
 
+    /// Negative Content-Length is rejected without slicing the buffer.
+    @Test func rejectsNegativeContentLength() {
+        var buffer = Data(
+            """
+            POST /fp-setup RTSP/1.0\r
+            CSeq: 2\r
+            Content-Length: -4\r
+            \r
+            ABCD
+            """.utf8
+        )
+
+        #expect(AirPlayHTTPParser.parseNextRequest(from: &buffer) == nil)
+        #expect(buffer.isEmpty)
+    }
+
     /// Asserts two RTSP requests are drained sequentially from one buffer.
     @Test func parsesSequentialRequestsFromSameBuffer() {
         var buffer = Data(
