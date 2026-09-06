@@ -11,7 +11,7 @@ final class MirrorStreamSession: @unchecked Sendable {
         case binary
     }
 
-    private static let maxHandshakeHeaderBytes = 16_384
+    private static let maxHandshakeHeaderBytes = 16384
     private static let maxPlistBodyBytes = 1_048_576
 
     private let socketFD: Int32
