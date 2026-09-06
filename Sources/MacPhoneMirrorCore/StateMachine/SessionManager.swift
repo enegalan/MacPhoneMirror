@@ -2,7 +2,9 @@ import Combine
 import CoreGraphics
 import Foundation
 
-// swiftlint:disable file_length
+/// Facade: AirPlay listen toggle, USB auto-connect, session open/close, input fan-out.
+/// UI observes @Published state/sessions; mirror windows open via publishers.
+/// AirPlay video can start before HID is ready — uses SimulatedInputTransport until connect() succeeds.
 // swiftlint:disable:next type_body_length
 public final class SessionManager: ObservableObject, @unchecked Sendable {
     public static let shared = SessionManager()
@@ -10,11 +12,26 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
     @Published public var state: ConnectionState = .discovering
     @Published public var sessions: [MirrorSession] = []
     @Published public var orientation: DeviceOrientation = .portrait
-    @Published public var statistics: StreamStatistics = .init()
     @Published public var isServiceEnabled: Bool = true
 
     private let sessionWindowOpenSubject = PassthroughSubject<String, Never>()
     private let sessionWindowCloseSubject = PassthroughSubject<String, Never>()
+    private let store = MirrorSessionStore()
+    private let service = AirPlayServiceController()
+    private let usbCoordinator = USBAutoConnectCoordinator()
+    private lazy var inputRouter = SessionInputRouter(
+        sessionLookup: { [weak self] id in self?.store.session(id: id) },
+        activeSessionID: { [weak self] in
+            self?.store.activeSession?.id
+        },
+        send: { [weak self] event, sessionID in
+            try await self?.sendInputEvent(
+                event,
+                sessionID: sessionID
+            )
+        }
+    )
+    private var cancellables = Set<AnyCancellable>()
 
     public var sessionWindowOpenPublisher: AnyPublisher<String, Never> {
         sessionWindowOpenSubject.eraseToAnyPublisher()
@@ -24,83 +41,33 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         sessionWindowCloseSubject.eraseToAnyPublisher()
     }
 
-    private let stateSubject = CurrentValueSubject<ConnectionState, Never>(.discovering)
-    private let orientationSubject = CurrentValueSubject<DeviceOrientation, Never>(.portrait)
-    private let statisticsSubject = CurrentValueSubject<StreamStatistics, Never>(StreamStatistics())
-
-    private var sessionsByID: [String: MirrorSession] = [:]
-    private var sessionReceivers: [String: ScreenMirrorReceiver] = [:]
-    private var sessionTransports: [String: PhoneInputTransport] = [:]
-    private var activeSessionID: String?
-    private let coordinateMapper: InputCoordinateMapper = StandardCoordinateMapper()
-    private let usbDiscovery = USBDeviceDiscovery()
-    private var cancellables = Set<AnyCancellable>()
-    private let lock = NSLock()
-    private var statsTimer: Timer?
-    private var isListening = false
-    private var serviceGeneration: UInt64 = 0
-    private var didSetupUSBAutoConnect = false
-    private var connectedUSBDeviceID: String?
-
-    public var statePublisher: AnyPublisher<ConnectionState, Never> {
-        stateSubject.eraseToAnyPublisher()
-    }
-
-    public var orientationPublisher: AnyPublisher<DeviceOrientation, Never> {
-        orientationSubject.eraseToAnyPublisher()
-    }
-
-    public var statisticsPublisher: AnyPublisher<StreamStatistics, Never> {
-        statisticsSubject.eraseToAnyPublisher()
-    }
-
-    public var currentReceiver: ScreenMirrorReceiver? {
-        lock.lock()
-        defer { lock.unlock() }
-        if let activeSessionID, let receiver = sessionReceivers[activeSessionID] {
-            return receiver
-        }
-        return sessionReceivers.values.first
-    }
-
     public var activeSession: MirrorSession? {
-        lock.lock()
-        defer { lock.unlock() }
-        if let activeSessionID, let session = sessionsByID[activeSessionID] {
-            return session
-        }
-        return sessionsByID.values.first
+        store.activeSession
     }
 
     public var hasActiveSessions: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return !sessionsByID.isEmpty
+        store.hasActiveSessions
     }
 
+    /// Wires store callbacks, USB auto-connect, and AirPlay Combine sinks onto the main queue.
     public init() {
-        isServiceEnabled = UserDefaults.standard.object(forKey: "airplay.serviceEnabled") as? Bool ?? true
+        let serviceKey = AppPreferences.Key.airPlayServiceEnabled
+        isServiceEnabled = UserDefaults.standard.object(forKey: serviceKey) as? Bool ?? true
 
-        stateSubject
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] newState in
-                self?.state = newState
-            }
-            .store(in: &cancellables)
+        store.onSessionsChanged = { [weak self] in
+            self?.syncPublishedSessions()
+        }
+        store.onWindowClose = { [weak self] id in
+            self?.sessionWindowCloseSubject.send(id)
+        }
 
-        orientationSubject
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] newOrientation in
-                self?.orientation = newOrientation
-            }
-            .store(in: &cancellables)
-
-        statisticsSubject
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] newStats in
-                self?.statistics = newStats
-            }
-            .store(in: &cancellables)
+        usbCoordinator.onDeviceAppeared = { [weak self] device in
+            Task { await self?.connectUSB(device) }
+        }
+        usbCoordinator.onDeviceDisappeared = { [weak self] deviceID in
+            self?.disconnect(sessionID: deviceID)
+            self?.usbCoordinator.clearConnectedDevice()
+        }
 
         NetworkStreamReceiver.shared.mirroringStartedPublisher
             .receive(on: DispatchQueue.main)
@@ -119,63 +86,55 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         NetworkStreamReceiver.shared.orientationPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] orientation in
-                self?.setOrientation(orientation, sessionID: self?.airPlaySessionIDs().first)
+                self?.setOrientation(orientation, sessionID: self?.store.airPlaySessionIDs().first)
             }
             .store(in: &cancellables)
-
-        startStatsTimer()
     }
 
-    private func startStatsTimer() {
-        DispatchQueue.main.async {
-            self.statsTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-                let stats = PerformanceMonitor.shared.currentStatistics()
-                self?.statisticsSubject.send(stats)
+    /// Publishes connection state on the main thread for SwiftUI observation.
+    private func setState(_ newState: ConnectionState) {
+        if Thread.isMainThread {
+            state = newState
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                self?.state = newState
             }
         }
     }
 
-    private func setState(_ newState: ConnectionState) {
-        lock.lock()
-        stateSubject.send(newState)
-        lock.unlock()
+    /// Publishes global orientation on the main thread; skips no-op updates.
+    private func publishOrientation(_ newOrientation: DeviceOrientation) {
+        if Thread.isMainThread {
+            guard orientation != newOrientation else { return }
+            orientation = newOrientation
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, orientation != newOrientation else { return }
+                orientation = newOrientation
+            }
+        }
     }
 
+    /// Mirrors store.sortedSessions into @Published sessions on the main queue.
     private func syncPublishedSessions() {
-        lock.lock()
-        let list = Array(sessionsByID.values).sorted { $0.device.name < $1.device.name }
-        lock.unlock()
+        let list = store.sortedSessions
         DispatchQueue.main.async { [weak self] in
             self?.sessions = list
         }
     }
 
-    private func airPlaySessionIDs() -> [String] {
-        lock.lock()
-        defer { lock.unlock() }
-        return sessionsByID.values
-            .filter { $0.device.connectionType == .wifi }
-            .map(\.id)
-    }
-
-    private func firstRemainingSession() -> MirrorSession? {
-        lock.lock()
-        defer { lock.unlock() }
-        return sessionsByID.values.first
-    }
-
+    /// Looks up a session by id without mutating store state.
     public func session(id: String) -> MirrorSession? {
-        lock.lock()
-        defer { lock.unlock() }
-        return sessionsByID[id]
+        store.session(id: id)
     }
 
+    /// Returns the video receiver bound to a session (AirPlay shared or USB-owned).
     public func receiver(for sessionID: String) -> ScreenMirrorReceiver? {
-        lock.lock()
-        defer { lock.unlock() }
-        return sessionReceivers[sessionID]
+        store.receiver(for: sessionID)
     }
 
+    /// Installs a session, opens its mirror window, and sets state to mirroring.
+    /// When replaceExistingAirPlay is true, tears down other Wi-Fi sessions first.
     @discardableResult
     public func beginMirroringSession(
         device: PhoneDevice,
@@ -184,28 +143,15 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         replaceExistingAirPlay: Bool = true
     ) -> String {
         if replaceExistingAirPlay {
-            replaceAirPlaySessionsIfNeeded(keepingDeviceID: device.id)
+            for id in store.replaceAirPlaySessionIDs(keepingDeviceID: device.id) {
+                store.tearDown(id: id, stopReceiver: false, publishClose: true)
+            }
         }
 
         let sessionID = device.id
         let session = MirrorSession(device: device, id: sessionID, orientation: .portrait)
+        _ = store.install(session: session, receiver: receiver, transport: transport)
 
-        lock.lock()
-        if let previous = sessionReceivers[sessionID], previous !== receiver {
-            let wasAirPlay = previous === NetworkStreamReceiver.shared
-            disconnectTransportIfOwned(sessionTransports[sessionID])
-            if !wasAirPlay {
-                previous.stop()
-            }
-            sessionWindowCloseSubject.send(sessionID)
-        }
-        sessionsByID[sessionID] = session
-        sessionReceivers[sessionID] = receiver
-        sessionTransports[sessionID] = transport
-        activeSessionID = sessionID
-        lock.unlock()
-
-        syncPublishedSessions()
         setOrientation(.portrait, sessionID: sessionID)
         setState(.mirroring(device))
         sessionWindowOpenSubject.send(sessionID)
@@ -213,93 +159,20 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         return sessionID
     }
 
-    private func replaceAirPlaySessionsIfNeeded(keepingDeviceID: String) {
-        lock.lock()
-        let existingIDs = sessionsByID.values
-            .filter { $0.device.connectionType == .wifi && $0.id != keepingDeviceID }
-            .map(\.id)
-        lock.unlock()
-
-        for id in existingIDs {
-            tearDownSession(id: id, stopReceiver: false, publishClose: true)
-        }
-    }
-
-    private func tearDownSession(id: String, stopReceiver: Bool, publishClose: Bool) {
-        lock.lock()
-        let receiver = sessionReceivers.removeValue(forKey: id)
-        let transport = sessionTransports.removeValue(forKey: id)
-        sessionsByID.removeValue(forKey: id)
-        if activeSessionID == id {
-            activeSessionID = sessionReceivers.keys.first
-        }
-        let isAirPlay = receiver === NetworkStreamReceiver.shared
-        lock.unlock()
-
-        disconnectTransportIfOwned(transport)
-        if stopReceiver, let receiver, !isAirPlay {
-            receiver.stop()
-        }
-
-        syncPublishedSessions()
-        if publishClose {
-            sessionWindowCloseSubject.send(id)
-        }
-    }
-
-    private func getTransport(for sessionID: String?) -> PhoneInputTransport? {
-        lock.lock()
-        defer { lock.unlock() }
-        if let sessionID {
-            return sessionTransports[sessionID]
-        }
-        return activeSessionID.flatMap { sessionTransports[$0] } ?? sessionTransports.values.first
-    }
-
-    private func markListeningStarted() {
-        lock.lock()
-        isListening = true
-        lock.unlock()
-    }
-
-    private func markListeningStopped() {
-        lock.lock()
-        isListening = false
-        lock.unlock()
-    }
-
-    private func bumpServiceGeneration() -> UInt64 {
-        lock.lock()
-        serviceGeneration += 1
-        let generation = serviceGeneration
-        lock.unlock()
-        return generation
-    }
-
-    private func isCurrentServiceGeneration(_ generation: UInt64) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return generation == serviceGeneration
-    }
-
-    private func isAlreadyListening() -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return isListening
-    }
-
+    /// Bumps the AirPlay generation and starts advertising if the service is enabled.
     public func startListening() async {
-        let generation = bumpServiceGeneration()
+        let generation = service.bumpGeneration()
         await startListening(generation: generation)
     }
 
+    /// Generation-guarded AirPlay + HID + USB discovery start; aborts if toggled off mid-await.
     private func startListening(generation: UInt64) async {
-        guard isServiceEnabled, isCurrentServiceGeneration(generation) else {
+        guard isServiceEnabled, service.isCurrentGeneration(generation) else {
             AppLogger.info("AirPlay service is disabled; skipping start.", category: .session)
             return
         }
 
-        if isAlreadyListening(), NetworkStreamReceiver.shared.isAdvertising {
+        if service.isAlreadyListening(), NetworkStreamReceiver.shared.isAdvertising {
             return
         }
 
@@ -309,27 +182,27 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
 
         do {
             try await NetworkStreamReceiver.shared.start()
-            guard isServiceEnabled, isCurrentServiceGeneration(generation) else {
+            guard isServiceEnabled, service.isCurrentGeneration(generation) else {
                 NetworkStreamReceiver.shared.stop()
-                markListeningStopped()
+                service.markListeningStopped()
                 AppLogger.info("AirPlay start aborted — service toggled off mid-start", category: .session)
                 return
             }
-            markListeningStarted()
+            service.markListeningStarted()
             AppLogger.info("AirPlay receiver ready. Waiting for iPhone to connect.", category: .session)
         } catch {
-            guard isCurrentServiceGeneration(generation) else {
+            guard service.isCurrentGeneration(generation) else {
                 AppLogger.info("Ignoring stale AirPlay start failure after newer toggle", category: .session)
                 return
             }
-            markListeningStopped()
+            service.markListeningStopped()
             let message = "Could not start AirPlay receiver: \(error.localizedDescription)"
             AppLogger.error(message, category: .session)
             setState(.failed(message))
             return
         }
 
-        guard isCurrentServiceGeneration(generation), isServiceEnabled else { return }
+        guard service.isCurrentGeneration(generation), isServiceEnabled else { return }
 
         Task {
             do {
@@ -340,12 +213,13 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
             }
         }
 
-        setupUSBAutoConnect()
+        usbCoordinator.start()
     }
 
+    /// Stops AirPlay advertising, HID, and all sessions after invalidating the start generation.
     private func stopListening() {
-        _ = bumpServiceGeneration()
-        markListeningStopped()
+        _ = service.bumpGeneration()
+        service.markListeningStopped()
         NetworkStreamReceiver.shared.stop()
         BluetoothHIDTransport.shared.stopAdvertising()
         disconnect()
@@ -353,38 +227,17 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         AppLogger.info("AirPlay service disabled by user", category: .session)
     }
 
-    private func setupUSBAutoConnect() {
-        guard !didSetupUSBAutoConnect else {
-            usbDiscovery.start()
-            return
-        }
-        didSetupUSBAutoConnect = true
-        usbDiscovery.start()
-        usbDiscovery.devicesPublisher
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] devices in
-                guard let self else { return }
-
-                if let usbDevice = devices.first {
-                    if connectedUSBDeviceID != usbDevice.id {
-                        connectedUSBDeviceID = usbDevice.id
-                        Task { await self.connectUSB(usbDevice) }
-                    }
-                } else {
-                    connectedUSBDeviceID = nil
-                }
-            }
-            .store(in: &cancellables)
-    }
-
+    /// Opens an AirPlay mirror session; uses SimulatedInputTransport until HID connect succeeds.
     private func handleIncomingAirPlay(from deviceName: String) {
         let device = PhoneDevice(
             name: deviceName,
-            id: "airplay-\(deviceName)",
+            id: "airplay-active",
             connectionType: .wifi,
             isPairedForControl: false
         )
 
+        // Video (AirPlay) and control (BLE HID) are independent channels. Start mirroring
+        // immediately; use SimulatedInputTransport until HID advertising/subscribers exist.
         let hid = BluetoothHIDTransport.shared
         beginMirroringSession(
             device: device,
@@ -396,38 +249,24 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         Task {
             do {
                 try await hid.connect()
-                replaceSimulatedTransportIfNeeded(sessionID: device.id, with: hid)
+                // Swap the no-op fallback for the real peripheral once connect() succeeds.
+                store.replaceSimulatedTransportIfNeeded(sessionID: device.id, with: hid)
             } catch {
                 AppLogger.warning("Bluetooth input unavailable: \(error.localizedDescription)", category: .session)
             }
         }
     }
 
-    private func replaceSimulatedTransportIfNeeded(sessionID: String, with transport: PhoneInputTransport) {
-        lock.lock()
-        if sessionTransports[sessionID] is SimulatedInputTransport {
-            sessionTransports[sessionID] = transport
-        } else if transport !== BluetoothHIDTransport.shared {
-            transport.disconnect()
-        }
-        lock.unlock()
-    }
-
-    private func disconnectTransportIfOwned(_ transport: PhoneInputTransport?) {
-        guard let transport, transport !== BluetoothHIDTransport.shared else { return }
-        transport.disconnect()
-    }
-
+    /// Tears down Wi-Fi sessions on AirPlay end; restores USB session state if any remain.
     private func handleAirPlaySessionEnded() {
-        for id in airPlaySessionIDs() {
-            tearDownSession(id: id, stopReceiver: false, publishClose: true)
+        for id in store.airPlaySessionIDs() {
+            store.tearDown(id: id, stopReceiver: false, publishClose: true)
         }
 
-        PerformanceMonitor.shared.reset()
         AirPlayPairingState.shared.clearPIN()
         setOrientation(.portrait)
 
-        if let remaining = firstRemainingSession() {
+        if let remaining = store.firstRemainingSession() {
             setState(.mirroring(remaining.device))
             setOrientation(remaining.orientation, sessionID: remaining.id)
         } else {
@@ -437,6 +276,7 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         AppLogger.info("AirPlay mirroring ended. Waiting for next connection.", category: .session)
     }
 
+    /// Starts USB capture and a non-replacing mirror session; clears USB tracking on failure.
     private func connectUSB(_ device: PhoneDevice) async {
         setState(.connecting(device))
         AppLogger.info("USB iPhone detected: \(device.name)", category: .session)
@@ -457,12 +297,15 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
                 do {
                     try await inputTransport.connect()
                 } catch {
-                    AppLogger.warning("Bluetooth HID unavailable for USB session: \(error.localizedDescription)", category: .bluetooth)
+                    AppLogger.warning(
+                        "Bluetooth HID unavailable for USB session: \(error.localizedDescription)",
+                        category: .bluetooth
+                    )
                 }
             }
         } catch {
             receiver.stop()
-            connectedUSBDeviceID = nil
+            usbCoordinator.clearConnectedDevice()
 
             let message = "Could not start USB mirroring for \(device.name): \(error.localizedDescription)"
             AppLogger.error(message, category: .session)
@@ -470,35 +313,30 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         }
     }
 
+    /// Closes one session; ends AirPlay network session if needed and updates global state.
     public func disconnect(sessionID: String) {
-        lock.lock()
-        let receiver = sessionReceivers[sessionID]
-        let isAirPlay = receiver === NetworkStreamReceiver.shared
-        lock.unlock()
-
-        tearDownSession(id: sessionID, stopReceiver: true, publishClose: true)
+        let isAirPlay = store.isAirPlayReceiver(sessionID: sessionID)
+        store.tearDown(id: sessionID, stopReceiver: true, publishClose: true)
 
         if isAirPlay {
             NetworkStreamReceiver.shared.endCurrentSession()
-            PerformanceMonitor.shared.reset()
             AirPlayPairingState.shared.clearPIN()
         }
 
-        if let remaining = firstRemainingSession() {
+        if let remaining = store.firstRemainingSession() {
             setState(.mirroring(remaining.device))
             setOrientation(remaining.orientation, sessionID: remaining.id)
         } else {
             setOrientation(.portrait)
             setState(.discovering)
-            connectedUSBDeviceID = nil
+            usbCoordinator.clearConnectedDevice()
             AppLogger.info("All mirror sessions closed.", category: .session)
         }
     }
 
+    /// Closes every open session; falls back to discovering when none existed.
     public func disconnect() {
-        lock.lock()
-        let ids = Array(sessionsByID.keys)
-        lock.unlock()
+        let ids = store.allSessionIDs
         for id in ids {
             disconnect(sessionID: id)
         }
@@ -507,21 +345,21 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         }
     }
 
-    // MARK: - Service Management
-
+    /// Persists AirPlay service enablement and starts or stops listening accordingly.
     public func setServiceEnabled(_ enabled: Bool) {
         guard enabled != isServiceEnabled else { return }
         isServiceEnabled = enabled
-        UserDefaults.standard.set(enabled, forKey: "airplay.serviceEnabled")
+        UserDefaults.standard.set(enabled, forKey: AppPreferences.Key.airPlayServiceEnabled)
 
         if enabled {
-            let generation = bumpServiceGeneration()
+            let generation = service.bumpGeneration()
             Task { await startListening(generation: generation) }
         } else {
             stopListening()
         }
     }
 
+    /// Updates the advertised AirPlay name and restarts the receiver if currently listening.
     public func updateServiceName(_ newName: String) async {
         let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed != AirPlayTXTRecordBuilder.serviceName else { return }
@@ -537,114 +375,52 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         }
     }
 
+    /// Updates session (and optionally global) orientation via the store.
     public func setOrientation(_ newOrientation: DeviceOrientation, sessionID: String? = nil) {
-        lock.lock()
-        let targetID = sessionID ?? activeSessionID ?? sessionsByID.keys.first
-        guard let targetID, var session = sessionsByID[targetID] else {
-            lock.unlock()
-            if orientation != newOrientation {
-                orientationSubject.send(newOrientation)
-            }
+        let result = store.updateOrientation(newOrientation, sessionID: sessionID)
+        if result.targetMissing {
+            publishOrientation(newOrientation)
             return
         }
-
-        let shouldUpdateGlobal = targetID == activeSessionID || sessionsByID.count == 1
-        let changed = session.orientation != newOrientation
-        if changed {
-            session.orientation = newOrientation
-            sessionsByID[targetID] = session
-        }
-        lock.unlock()
-
-        if changed {
-            syncPublishedSessions()
+        if result.changed {
             AppLogger.info("Device orientation updated: \(newOrientation.rawValue)", category: .session)
         }
-
-        if shouldUpdateGlobal, orientation != newOrientation {
-            orientationSubject.send(newOrientation)
+        if result.shouldUpdateGlobal {
+            publishOrientation(newOrientation)
         }
     }
 
+    /// Forwards a control event to the session's input transport (nil id → active session).
     public func sendInputEvent(_ event: PhoneInputEvent, sessionID: String? = nil) async throws {
-        if let transport = getTransport(for: sessionID) {
+        if let transport = store.transport(for: sessionID) {
             try await transport.send(event)
         }
     }
 
-    public func handleMouseClick(
-        at viewportPoint: CGPoint,
-        viewportSize: CGSize,
-        sessionID: String? = nil
-    ) async {
-        await handlePointerDown(at: viewportPoint, viewportSize: viewportSize, sessionID: sessionID)
-        try? await Task.sleep(nanoseconds: 50_000_000)
-        await handlePointerUp(at: viewportPoint, viewportSize: viewportSize, sessionID: sessionID)
-    }
-
+    /// Maps a viewport pointer-down into HID events for the target session.
     public func handlePointerDown(
         at viewportPoint: CGPoint,
         viewportSize: CGSize,
         sessionID: String? = nil
     ) async {
-        guard AppPreferences.enableMouseControl else { return }
-        guard let sessionID = resolvedSessionID(sessionID),
-              let normPoint = normalizedPoint(viewportPoint, viewportSize: viewportSize, sessionID: sessionID)
-        else { return }
-
-        try? await sendInputEvent(.pointerTo(normalizedX: normPoint.x, normalizedY: normPoint.y), sessionID: sessionID)
-        try? await sendInputEvent(.pointerDown(button: .left), sessionID: sessionID)
+        await inputRouter.handlePointerDown(at: viewportPoint, viewportSize: viewportSize, sessionID: sessionID)
     }
 
+    /// Maps a viewport pointer-move into HID events for the target session.
     public func handlePointerMove(
         at viewportPoint: CGPoint,
         viewportSize: CGSize,
         sessionID: String? = nil
     ) async {
-        guard AppPreferences.enableMouseControl else { return }
-        guard let sessionID = resolvedSessionID(sessionID),
-              let normPoint = normalizedPoint(viewportPoint, viewportSize: viewportSize, sessionID: sessionID)
-        else { return }
-
-        // Absolute move while button is held — AssistiveTouch treats this as a drag.
-        try? await sendInputEvent(.pointerTo(normalizedX: normPoint.x, normalizedY: normPoint.y), sessionID: sessionID)
+        await inputRouter.handlePointerMove(at: viewportPoint, viewportSize: viewportSize, sessionID: sessionID)
     }
 
+    /// Maps a viewport pointer-up into HID events for the target session.
     public func handlePointerUp(
         at viewportPoint: CGPoint,
         viewportSize: CGSize,
         sessionID: String? = nil
     ) async {
-        guard AppPreferences.enableMouseControl else { return }
-        guard let sessionID = resolvedSessionID(sessionID) else { return }
-
-        if let normPoint = normalizedPoint(viewportPoint, viewportSize: viewportSize, sessionID: sessionID) {
-            try? await sendInputEvent(
-                .pointerTo(normalizedX: normPoint.x, normalizedY: normPoint.y),
-                sessionID: sessionID
-            )
-        }
-        try? await sendInputEvent(.pointerUp(button: .left), sessionID: sessionID)
-    }
-
-    private func resolvedSessionID(_ sessionID: String?) -> String? {
-        if let sessionID, session(id: sessionID) != nil {
-            return sessionID
-        }
-        return sessionID == nil ? activeSession?.id : nil
-    }
-
-    private func normalizedPoint(
-        _ viewportPoint: CGPoint,
-        viewportSize: CGSize,
-        sessionID: String
-    ) -> CGPoint? {
-        guard let session = session(id: sessionID) else { return nil }
-        return coordinateMapper.map(
-            point: viewportPoint,
-            in: viewportSize,
-            device: session.device,
-            orientation: session.orientation
-        )
+        await inputRouter.handlePointerUp(at: viewportPoint, viewportSize: viewportSize, sessionID: sessionID)
     }
 }

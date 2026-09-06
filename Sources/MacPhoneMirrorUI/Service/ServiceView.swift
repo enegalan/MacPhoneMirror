@@ -1,13 +1,17 @@
 import MacPhoneMirrorCore
 import SwiftUI
 
+// AirPlay service toggle, advertised name, pairing PIN, and connected-device status.
+
 public struct ServiceView: View {
     @ObservedObject private var sessionManager = SessionManager.shared
+    @ObservedObject private var pairingState = AirPlayPairingState.shared
     @State private var serviceName: String = AirPlayTXTRecordBuilder.serviceName
     @State private var isEditingName = false
     @State private var isSavingName = false
     @State private var showingConnectionGuide = false
 
+    /// Creates the Service tab bound to the shared session and pairing state.
     public init() {}
 
     public var body: some View {
@@ -16,6 +20,11 @@ public struct ServiceView: View {
                 header
 
                 serviceCard
+
+                if let pin = pairingState.displayPIN {
+                    pairingPINCard(pin)
+                }
+
                 devicesCard
             }
             .padding(28)
@@ -141,10 +150,12 @@ public struct ServiceView: View {
         }
     }
 
+    /// Enters inline edit mode for the advertised AirPlay device name.
     private func beginEditing() {
         isEditingName = true
     }
 
+    /// Saves a trimmed device name and refreshes the advertised service name.
     private func confirmNameChange() {
         let trimmed = serviceName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -159,6 +170,30 @@ public struct ServiceView: View {
                 isSavingName = false
                 serviceName = AirPlayTXTRecordBuilder.serviceName
             }
+        }
+    }
+
+    /// Card that prominently displays the AirPlay pairing PIN for the user.
+    private func pairingPINCard(_ pin: String) -> some View {
+        SettingsCard(
+            title: "AirPlay Pairing",
+            subtitle: "Enter this PIN on your iPhone",
+            icon: "lock.rectangle"
+        ) {
+            HStack(spacing: 12) {
+                SettingsRowIcon("number", tint: .orange)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(pin)
+                        .font(.system(size: 36, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundColor(.primary)
+                    Text("Your iPhone is asking for a pairing code.")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+            }
+            .padding(.vertical, 8)
         }
     }
 
@@ -196,6 +231,7 @@ public struct ServiceView: View {
         .padding(.vertical, 6)
     }
 
+    /// Status row for one connected mirror session in the devices card.
     private func connectedDeviceRow(_ session: MirrorSession) -> some View {
         HStack(spacing: 10) {
             SettingsRowIcon(session.device.connectionType.iconName, tint: .blue)

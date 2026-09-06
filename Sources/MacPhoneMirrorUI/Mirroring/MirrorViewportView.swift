@@ -1,6 +1,8 @@
 import MacPhoneMirrorCore
 import SwiftUI
 
+// Composes phone frame + live video + input hit testing for a session window.
+
 public struct MirrorViewportView: View {
     public let sessionID: String
     public let device: PhoneDevice
@@ -14,6 +16,7 @@ public struct MirrorViewportView: View {
     @State private var lastMoveSentAt = Date.distantPast
     @State private var ripples: [TouchRipple] = []
 
+    /// Creates the viewport for a device session with orientation and frame style.
     public init(
         sessionID: String,
         device: PhoneDevice,
@@ -32,6 +35,7 @@ public struct MirrorViewportView: View {
         }
     }
 
+    /// Lays out the phone frame centered and scaled to fit the container.
     private func viewportContent(in containerSize: CGSize) -> some View {
         let naturalSize = naturalFrameSize
         let scale = fittedScale(naturalSize: naturalSize, in: containerSize)
@@ -53,6 +57,7 @@ public struct MirrorViewportView: View {
         .onChange(of: sessionID) { _, _ in bindReceiver() }
     }
 
+    /// Builds the phone chrome wrapping live Metal video and touch ripples.
     private func phoneFrame(scale: CGFloat, displaySize: CGSize) -> some View {
         PhoneFrameView(
             model: device.model,
@@ -135,6 +140,7 @@ public struct MirrorViewportView: View {
             }
     }
 
+    /// Spawns a fading tap-ripple animation at the pointer location when enabled.
     private func spawnRipple(at point: CGPoint) {
         guard AppPreferences.showTouchRipples else { return }
         let ripple = TouchRipple(point: point)
@@ -150,6 +156,7 @@ public struct MirrorViewportView: View {
         }
     }
 
+    /// Binds the Metal state holder to the session's screen-mirror receiver.
     private func bindReceiver() {
         if let rec = SessionManager.shared.receiver(for: sessionID) {
             metalHolder.bind(to: rec)
@@ -174,6 +181,7 @@ public struct MirrorViewportView: View {
         }
     }
 
+    /// Computes a fit-to-window scale factor clamped to a minimum readable size.
     private func fittedScale(naturalSize: CGSize, in containerSize: CGSize) -> CGFloat {
         let horizontalPadding: CGFloat = 20
         let verticalPadding: CGFloat = 20

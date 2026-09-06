@@ -1,6 +1,9 @@
 import CoreGraphics
 import Foundation
 
+// Known iPhone model catalog with native point sizes for realistic frames and mapping.
+// Falls back to genericModern when the exact model is unknown.
+
 public enum PhoneModel: String, CaseIterable, Identifiable, Codable, Sendable {
     case iPhone16ProMax = "iPhone 16 Pro Max"
     case iPhone16Pro = "iPhone 16 Pro"

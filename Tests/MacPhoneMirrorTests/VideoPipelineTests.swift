@@ -1,31 +1,11 @@
 @testable import MacPhoneMirrorCore
-import CoreGraphics
 import CoreVideo
 import Testing
 
+// Unit tests for video frame / decoder helpers without a live phone stream.
+
 struct VideoPipelineTests {
-    @Test func performanceMonitorCalculations() {
-        let monitor = PerformanceMonitor()
-        monitor.reset()
-
-        let resolution = CGSize(width: 1179, height: 2556)
-        for _ in 0 ..< 10 {
-            monitor.recordFrameReceived(resolution: resolution)
-            monitor.recordDecodeTime(2.5)
-            monitor.recordRenderTime(1.1)
-        }
-        monitor.recordDroppedFrame()
-
-        let stats = monitor.currentStatistics()
-        #expect(stats.totalFrames == 10)
-        #expect(stats.droppedFrames == 1)
-        #expect(stats.resolution == resolution)
-        #expect(stats.decodeTimeMs > 0)
-        #expect(stats.renderTimeMs > 0)
-        #expect(stats.totalLatencyMs > 0)
-        #expect(stats.dropRatePercentage > 0)
-    }
-
+    /// Asserts VideoFrame wraps a CVPixelBuffer with correct size and index.
     @Test func videoFrameCreation() {
         var pixelBuffer: CVPixelBuffer?
         let attrs: [String: Any] = [

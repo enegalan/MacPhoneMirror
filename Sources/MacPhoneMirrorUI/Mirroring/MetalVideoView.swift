@@ -4,13 +4,17 @@ import MacPhoneMirrorCore
 import MetalKit
 import SwiftUI
 
+// NSViewRepresentable wrapping MTKView + MetalVideoRenderer for live frames.
+
 public struct MetalVideoView: NSViewRepresentable {
     @ObservedObject var stateHolder: MetalViewStateHolder
 
+    /// Creates a Metal-backed video view driven by the given state holder.
     public init(stateHolder: MetalViewStateHolder) {
         self.stateHolder = stateHolder
     }
 
+    /// Builds and configures the MTKView for continuous frame display.
     public func makeNSView(context _: Context) -> MTKView {
         let mtkView = MTKView()
         mtkView.device = stateHolder.renderer?.device ?? MTLCreateSystemDefaultDevice()
@@ -25,6 +29,7 @@ public struct MetalVideoView: NSViewRepresentable {
         return mtkView
     }
 
+    /// Keeps the MTKView delegate and display loop aligned with the state holder.
     public func updateNSView(_ nsView: MTKView, context _: Context) {
         if nsView.delegate !== stateHolder.renderer {
             nsView.delegate = stateHolder.renderer
@@ -39,6 +44,7 @@ public final class MetalViewStateHolder: ObservableObject, @unchecked Sendable {
     private var cancellables = Set<AnyCancellable>()
     private var didLogFirstRender = false
 
+    /// Creates a state holder with an optional Metal renderer for frame delivery.
     public init(renderer: MetalVideoRenderer? = MetalVideoRenderer()) {
         self.renderer = renderer
         if renderer == nil {
@@ -46,6 +52,7 @@ public final class MetalViewStateHolder: ObservableObject, @unchecked Sendable {
         }
     }
 
+    /// Subscribes to receiver frames and forwards them to the Metal renderer.
     public func bind(to receiver: ScreenMirrorReceiver) {
         cancellables.removeAll()
         didLogFirstRender = false

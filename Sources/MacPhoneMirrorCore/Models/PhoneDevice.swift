@@ -1,6 +1,9 @@
 import CoreGraphics
 import Foundation
 
+// Device identity shown in UI (name, connection type, screen size, pairing flags).
+// Hashable/Sendable so it can flow through publishers and window open requests.
+
 public enum DeviceConnectionType: String, Codable, Sendable, CaseIterable {
     case usb = "USB (High Speed)"
     case wifi = "Wi-Fi (AirPlay)"
@@ -32,6 +35,7 @@ public struct PhoneDevice: Identifiable, Hashable, Codable, Sendable {
     public var osVersion: String?
     public var ipAddress: String?
 
+    /// Builds a device record for discovery results, AirPlay stubs, and UI lists.
     public init(
         name: String,
         id: String = UUID().uuidString,

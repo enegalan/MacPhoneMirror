@@ -12,8 +12,8 @@ MacPhoneMirror is engineered around privacy and system integrity.
 ### 2. Permissions Policy
 MacPhoneMirror requests only the permissions strictly required to perform its functions:
 * **Screen / Device Capture (`AVCaptureDevice`)**: Required by macOS to capture tethered iOS device video over USB.
-* **Bluetooth (`CoreBluetooth`)**: Required to pair with the iPhone as a Bluetooth HID device for mouse and keyboard control.
-* **Local Network (`Network.framework`)**: Required to browse Bonjour AirPlay services on the local Wi-Fi subnet.
+* **Bluetooth (`CoreBluetooth`)**: Required to pair with the iPhone as a Bluetooth HID pointer for AssistiveTouch taps and drags.
+* **Local Network (`Network.framework`)**: Required to advertise this Mac as an AirPlay receiver and accept Screen Mirroring on the local Wi-Fi subnet.
 
 MacPhoneMirror will **never** log passwords, keystrokes, personal messages, or user credentials.
 

@@ -1,6 +1,8 @@
 import MacPhoneMirrorCore
 import SwiftUI
 
+// Lists active mirror sessions and navigation destinations in the main window.
+
 public enum AppNavigationTab: String, CaseIterable, Identifiable {
     case service = "Service"
     case control = "Control"
@@ -28,6 +30,7 @@ public struct SidebarView: View {
     public let sessions: [MirrorSession]
     public let onFocusSession: (String) -> Void
 
+    /// Creates the sidebar with tab selection, connection state, and session focus callback.
     public init(
         selectedTab: Binding<AppNavigationTab>,
         activeState: ConnectionState,

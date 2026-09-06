@@ -2,6 +2,9 @@ import Darwin
 import Foundation
 import Network
 
+// NTP-like AirPlay timing UDP replies the phone uses to sync A/V clocks.
+// Without timely responses, iOS may drop or desync the mirror session.
+
 final class AirPlayTimingServer: @unchecked Sendable {
     static let shared = AirPlayTimingServer()
 
@@ -15,20 +18,29 @@ final class AirPlayTimingServer: @unchecked Sendable {
     private var didLogSendFailure = false
     private var didLogSendSuccess = false
 
+    /// Singleton gate; timing state lives on the dedicated queue.
     private init() {}
 
-    func start(connection: NWConnection, clientTimingPort: UInt16, localPort: UInt16 = 7102) {
+    /// Starts NTP-style timing UDP toward the client's timing port.
+    /// Resolves the peer from `connection` and schedules periodic probes.
+    func start(
+        connection: NWConnection,
+        clientTimingPort: UInt16,
+        localPort: UInt16 = AirPlayPorts.timingDefault
+    ) {
         queue.async { [weak self] in
             self?.startLocked(connection: connection, clientTimingPort: clientTimingPort, localPort: localPort)
         }
     }
 
+    /// Stops the timing socket, timer, and receive source asynchronously.
     func stop() {
         queue.async { [weak self] in
             self?.stopLocked()
         }
     }
 
+    /// Tears down timing I/O on the timing queue; safe to call before restart.
     private func stopLocked() {
         timer?.cancel()
         timer = nil
@@ -43,6 +55,8 @@ final class AirPlayTimingServer: @unchecked Sendable {
         didLogSendSuccess = false
     }
 
+    /// Binds the local timing UDP socket and begins send/receive loops.
+    /// No-ops (after cleanup) if the client endpoint cannot be resolved.
     // swiftlint:disable:next function_body_length
     private func startLocked(connection: NWConnection, clientTimingPort: UInt16, localPort: UInt16) {
         stopLocked()
@@ -143,6 +157,7 @@ final class AirPlayTimingServer: @unchecked Sendable {
         self.timer = timer
     }
 
+    /// Best-effort interface name from endpoint scope (`%iface`) or NWPath.
     private static func interfaceName(from connection: NWConnection) -> String? {
         let description = "\(connection.endpoint)"
         if let percent = description.firstIndex(of: "%") {
@@ -162,6 +177,8 @@ final class AirPlayTimingServer: @unchecked Sendable {
         return nil
     }
 
+    /// Numeric host string for getaddrinfo; appends scope id for link-local IPv6.
+    /// Returns nil for non-IP endpoints.
     private static func hostString(from connection: NWConnection, interfaceName: String?) -> String? {
         let endpoint = connection.currentPath?.remoteEndpoint ?? connection.endpoint
         guard case let .hostPort(host, _) = endpoint else { return nil }
@@ -180,6 +197,8 @@ final class AirPlayTimingServer: @unchecked Sendable {
         }
     }
 
+    /// Fills `remoteAddress` for the client's timing UDP port.
+    /// Returns false if resolution fails or link-local IPv6 lacks a scope id.
     private func prepareRemoteAddress(from connection: NWConnection, port: UInt16, interfaceName: String?) -> Bool {
         guard let hostText = Self.hostString(from: connection, interfaceName: interfaceName) else {
             return false
@@ -223,6 +242,7 @@ final class AirPlayTimingServer: @unchecked Sendable {
         return true
     }
 
+    /// Human-readable host (with IPv6 scope) for logging.
     private static func describeAddress(_ storage: sockaddr_storage) -> String {
         var addr = storage
         if addr.ss_family == sa_family_t(AF_INET6) {
@@ -249,6 +269,8 @@ final class AirPlayTimingServer: @unchecked Sendable {
         return "unknown"
     }
 
+    /// Sends one AirPlay timing request (NTP-like) to the client.
+    /// Side effect: updates one-shot success/failure log flags.
     private func sendTimingPacket() {
         guard isRunning, socketFD >= 0 else { return }
 
@@ -289,6 +311,7 @@ final class AirPlayTimingServer: @unchecked Sendable {
         }
     }
 
+    /// Non-blocking drain of timing UDP replies; logs first successful response.
     private func drainResponses() {
         guard socketFD >= 0 else { return }
         var buffer = [UInt8](repeating: 0, count: 128)

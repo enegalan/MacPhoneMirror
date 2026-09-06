@@ -1,5 +1,7 @@
 import Foundation
 
+// Single source for display name, version, and copyright from Info.plist.
+
 public enum AppInfo {
     public static let bundle: Bundle = .main
 

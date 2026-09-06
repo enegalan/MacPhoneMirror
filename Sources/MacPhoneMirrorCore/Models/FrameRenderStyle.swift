@@ -1,5 +1,8 @@
 import Foundation
 
+// Persisted frame finish / display-mode choices for the drawn iPhone chassis.
+// Pure model; rendering lives in MacPhoneMirrorUI phone-frame views.
+
 public enum FrameFinish: String, CaseIterable, Identifiable, Codable, Sendable {
     case naturalTitanium = "Natural Titanium"
     case blackTitanium = "Black Titanium"
@@ -32,22 +35,20 @@ public struct FrameRenderStyle: Codable, Sendable, Equatable {
     public var finish: FrameFinish
     public var showShadow: Bool
     public var showReflection: Bool
-    public var showHardwareButtons: Bool
     public var scaleFactor: Double
 
+    /// Defaults match the realistic titanium chassis look used by Settings and mirror windows.
     public init(
         displayMode: FrameDisplayMode = .realisticFrame,
         finish: FrameFinish = .naturalTitanium,
         showShadow: Bool = true,
         showReflection: Bool = true,
-        showHardwareButtons: Bool = true,
         scaleFactor: Double = 1.0
     ) {
         self.displayMode = displayMode
         self.finish = finish
         self.showShadow = showShadow
         self.showReflection = showReflection
-        self.showHardwareButtons = showHardwareButtons
         self.scaleFactor = scaleFactor
     }
 

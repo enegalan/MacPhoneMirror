@@ -1,5 +1,8 @@
 import Foundation
 
+// PhoneInputEvent vocabulary and PhoneInputTransport protocol.
+// Lets SessionManager swap Bluetooth HID vs simulated transports without UI changes.
+
 public enum MouseButton: UInt8, Sendable {
     case left = 1
     case right = 2
@@ -36,6 +39,7 @@ public enum PhoneInputEvent: Sendable, Equatable {
     case siri
     case swipe(direction: SwipeDirection)
 
+    /// Structural equality across all event cases (including associated values).
     public static func == (lhs: PhoneInputEvent, rhs: PhoneInputEvent) -> Bool {
         switch (lhs, rhs) {
         case let (.pointerMove(x1, y1), .pointerMove(x2, y2)):
@@ -80,7 +84,10 @@ public protocol PhoneInputTransport: AnyObject, Sendable {
     var isConnected: Bool { get }
     var transportName: String { get }
 
+    /// Establishes the control channel (e.g. starts HID advertising).
     func connect() async throws
+    /// Tears down or parks the control channel according to transport policy.
     func disconnect()
+    /// Delivers a single input event to the phone; may no-op if not yet subscribed.
     func send(_ event: PhoneInputEvent) async throws
 }

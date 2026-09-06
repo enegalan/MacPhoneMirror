@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-MacPhoneMirror is a native macOS application designed to provide low-latency iPhone screen mirroring and Mac-to-iPhone interaction. This report evaluates the technical viability, platform constraints, and implementation strategies for screen mirroring, video decoding, coordinate mapping, and device control under Apple's public SDK and security architecture.
+MacPhoneMirror is a native macOS application designed to provide low-latency iPhone screen mirroring and Mac-to-iPhone pointer interaction. This report evaluates the technical viability, platform constraints, and implementation strategies for screen mirroring, video decoding, coordinate mapping, and device control under Apple's public SDK and security architecture.
 
 ---
 
@@ -26,7 +26,6 @@ MacPhoneMirror is a native macOS application designed to provide low-latency iPh
   - Encapsulated behind `ScreenMirrorReceiver`:
     1. `AVFoundationUSBReceiver`: High-speed 60 FPS tethered hardware capture.
     2. `NetworkStreamReceiver`: Bonjour advertisement and network stream ingestion.
-    3. `TestPatternReceiver`: Real-time 60 FPS iOS screen simulator with touch ripples, status bar clock, dynamic wallpaper, and frame counters for headless testing and diagnostics.
 
 ---
 
@@ -50,23 +49,13 @@ MacPhoneMirror is a native macOS application designed to provide low-latency iPh
 ### A. What iOS Actually Permits
 * **Platform Boundary**: iOS has strict sandboxing and security policies. iOS **does not** provide an open network API or allow arbitrary remote applications to inject raw touch events directly into `SpringBoard` / UIKit window server without assistive technologies or MDM provisioning.
 * **The Legitimate, Supported Mechanism: Bluetooth HID + AssistiveTouch**:
-  - When a Mac advertises as a standard Bluetooth HID device (Mouse + Keyboard):
-    - **Pointer / Mouse Navigation**:
-      - With iOS *AssistiveTouch* enabled (`Settings -> Accessibility -> Touch -> AssistiveTouch`), iOS renders a native cursor.
-      - The Mac translates mouse and trackpad movements into relative HID mouse reports `(dx, dy)`.
-      - Left clicks simulate touch taps at the cursor location.
-      - Click-and-drag simulates swipe gestures, scrolling, and dragging.
-      - Right click can be mapped to Home, Control Center, or custom actions.
-      - Mouse wheel deltas scroll tables, lists, and web pages smoothly.
-    - **Keyboard Input**:
-      - Standard HID keystrokes type directly into active text fields, search bars, and Spotlight.
-      - iOS natively responds to hardware keyboard shortcuts:
-        - `⌘H`: Go to Home Screen
-        - `⌘Tab`: Open App Switcher / Multitasking
-        - `⌘Space`: Open Spotlight Search
-        - Arrow keys: Navigate lists and menus
+  - When a Mac advertises as a Bluetooth HID pointer device:
+    - With iOS *AssistiveTouch* enabled (`Settings → Accessibility → Touch → AssistiveTouch`), iOS renders a native cursor.
+    - Absolute HID mouse reports place the cursor on the mirrored screen.
+    - Left click = tap; click-and-drag = swipe / scroll / drag.
+  - **Out of scope**: Mac keyboard injection and system shortcuts (`⌘H`, App Switcher, Spotlight, etc.) are unreliable over this AssistiveTouch path and are **not** product features. Navigation beyond taps/drags uses on-screen AssistiveTouch gestures on the phone.
 * **Honest Representation**:
-  - MacPhoneMirror does not claim fake touchscreen injection; it leverages Apple's documented Bluetooth HID and AssistiveTouch subsystems.
+  - MacPhoneMirror does not claim fake touchscreen injection; it leverages Apple's documented Bluetooth HID and AssistiveTouch subsystems for pointer control only.
 
 ---
 
@@ -95,9 +84,12 @@ MacPhoneMirror is a native macOS application designed to provide low-latency iPh
 | Capability | Technical Mechanism | Public API? | Latency | Status in MacPhoneMirror |
 | :--- | :--- | :--- | :--- | :--- |
 | **USB Screen Mirroring** | AVFoundation `AVCaptureSession` | Yes | < 10 ms | Fully Implemented |
-| **AirPlay Discovery** | `Network.framework` Bonjour | Yes | < 5 ms | Fully Implemented |
-| **Hardware Video Decode** | VideoToolbox `VTDecompressionSession` | Yes | ~2–3 ms | Fully Implemented |
+| **AirPlay Receiver** | `Network.framework` Bonjour + RTSP | Yes* | < 5 ms discovery | Fully Implemented |
+| **Hardware Video Decode** | VideoToolbox H.264 / HEVC | Yes | ~2–3 ms | Fully Implemented |
 | **GPU Metal Render** | Metal + `CVMetalTextureCache` | Yes | ~1–2 ms | Fully Implemented |
-| **Mouse / Pointer Control** | Bluetooth HID + iOS AssistiveTouch | Yes | ~12–18 ms | Fully Implemented |
-| **Keyboard Typing & Shortcuts** | Bluetooth HID Keyboard Protocol | Yes | ~8–12 ms | Fully Implemented |
+| **Pointer Control** | Bluetooth HID + AssistiveTouch taps/drags | Yes | ~12–18 ms | Fully Implemented |
+| **Keyboard / Shortcuts** | — | — | — | **Not supported** (by design) |
+| **AirPlay Audio Playback** | RTP + AES-CBC / ChaChaPoly + AAC-ELD / AAC-LC / ALAC | Yes* | variable | Implemented |
 | **Device Framing** | SwiftUI Vector + Squircle Clipping | Yes | Zero lag | Fully Implemented |
+
+\* AirPlay receiver crypto/session details rely on documented public frameworks plus FairPlay helpers required for unmanaged Screen Mirroring.

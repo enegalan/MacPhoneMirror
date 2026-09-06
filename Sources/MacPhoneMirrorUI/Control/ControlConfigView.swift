@@ -1,12 +1,16 @@
 import MacPhoneMirrorCore
 import SwiftUI
 
+// AssistiveTouch / mouse-control setup and related preferences.
+// Explains how to pair the BLE HID peripheral on the iPhone.
+
 public struct ControlConfigView: View {
     @AppStorage(AppPreferences.Key.enableMouseControl) private var enableMouseControl = true
     @AppStorage(AppPreferences.Key.mouseSensitivity) private var mouseSensitivity = 1.0
     @AppStorage(AppPreferences.Key.showTouchRipples) private var showTouchRipples = true
     @State private var showingAssistiveTouchGuide = false
 
+    /// Creates the Control tab with default preference bindings.
     public init() {}
 
     public var body: some View {
@@ -117,6 +121,7 @@ public struct ControlConfigView: View {
 public struct AssistiveTouchGuideView: View {
     @Environment(\.dismiss) private var dismiss
 
+    /// Creates the AssistiveTouch pairing guide sheet.
     public init() {}
 
     public var body: some View {
@@ -169,6 +174,7 @@ public struct AssistiveTouchGuideView: View {
         }
     }
 
+    /// Numbered step row for the AssistiveTouch setup instructions.
     private func guideStep(_ num: Int, _ title: String, _ desc: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Text("\(num)")

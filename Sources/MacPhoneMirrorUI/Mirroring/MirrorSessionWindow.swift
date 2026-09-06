@@ -2,6 +2,9 @@ import AppKit
 import MacPhoneMirrorCore
 import SwiftUI
 
+// One NSWindow/SwiftUI scene per mirrored device.
+// Tears down on real window close only — SwiftUI onDisappear fires during reparent and was killing AirPlay mid-handshake.
+
 public struct MirrorSessionWindow: View {
     public let sessionID: String
 
@@ -9,6 +12,7 @@ public struct MirrorSessionWindow: View {
     @ObservedObject private var frameStyleStore = FrameStyleStore.shared
     @Environment(\.dismissWindow) private var dismissWindow
 
+    /// Creates a session window for the given mirror session identifier.
     public init(sessionID: String) {
         self.sessionID = sessionID
     }
@@ -65,6 +69,7 @@ public struct MirrorSessionWindow: View {
 private struct SessionWindowCloseHook: NSViewRepresentable {
     let sessionID: String
 
+    /// Installs a zero-size NSView used to attach the window-close observer.
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
         DispatchQueue.main.async {
@@ -74,6 +79,7 @@ private struct SessionWindowCloseHook: NSViewRepresentable {
         return view
     }
 
+    /// Re-attaches the close observer if the view moves to another window.
     func updateNSView(_ nsView: NSView, context: Context) {
         DispatchQueue.main.async {
             guard let window = nsView.window else { return }
@@ -81,6 +87,7 @@ private struct SessionWindowCloseHook: NSViewRepresentable {
         }
     }
 
+    /// Creates the coordinator that listens for NSWindow.willCloseNotification.
     func makeCoordinator() -> Coordinator {
         Coordinator()
     }
@@ -90,6 +97,7 @@ private struct SessionWindowCloseHook: NSViewRepresentable {
         private weak var observedWindow: NSWindow?
         private var sessionID: String = ""
 
+        /// Observes willClose on the given window and disconnects the session.
         func attach(to window: NSWindow, sessionID: String) {
             self.sessionID = sessionID
             if observer != nil, observedWindow === window {

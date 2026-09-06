@@ -1,6 +1,9 @@
 import Foundation
 import os
 
+// os.Logger facade with app-specific categories.
+// Central place to filter/inspect logs without scattering Logger(subsystem:) calls.
+
 public enum LogCategory: String {
     case device = "Device"
     case network = "Network"
@@ -19,6 +22,7 @@ public enum AppLogger {
     private nonisolated(unsafe) static var loggers: [LogCategory: Logger] = [:]
     private static let lock = NSLock()
 
+    /// Returns a cached `os.Logger` for the category, creating it on first use.
     public static func logger(for category: LogCategory) -> Logger {
         lock.lock()
         defer { lock.unlock() }
@@ -31,30 +35,36 @@ public enum AppLogger {
         return newLogger
     }
 
+    /// Logs at debug; not echoed to stderr.
     public static func debug(_ message: String, category: LogCategory) {
         logger(for: category).debug("\(message, privacy: .public)")
     }
 
+    /// Logs at info and echoes selected categories to stderr for console visibility.
     public static func info(_ message: String, category: LogCategory) {
         logger(for: category).info("\(message, privacy: .public)")
         echoToConsole(message, category: category, level: "INFO")
     }
 
+    /// Logs at notice and echoes selected categories to stderr.
     public static func notice(_ message: String, category: LogCategory) {
         logger(for: category).notice("\(message, privacy: .public)")
         echoToConsole(message, category: category, level: "NOTICE")
     }
 
+    /// Logs at warning and echoes selected categories to stderr.
     public static func warning(_ message: String, category: LogCategory) {
         logger(for: category).warning("\(message, privacy: .public)")
         echoToConsole(message, category: category, level: "WARN")
     }
 
+    /// Logs at error and echoes selected categories to stderr.
     public static func error(_ message: String, category: LogCategory) {
         logger(for: category).error("\(message, privacy: .public)")
         echoToConsole(message, category: category, level: "ERROR")
     }
 
+    /// Mirrors high-signal categories (AirPlay/session/network/Bluetooth) to stderr.
     private static func echoToConsole(_ message: String, category: LogCategory, level: String) {
         guard category == .airplay
             || category == .session

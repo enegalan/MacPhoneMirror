@@ -2,7 +2,10 @@
 import Foundation
 import Testing
 
+// Unit tests for PhoneInputEvent equality and SimulatedInputTransport recording.
+
 struct InputEventTests {
+    /// Asserts HID mouse report packs buttons, axes, and wheel into 6 bytes.
     @Test func mouseReportSerialization() {
         let report = HIDMouseReport(buttons: MouseButton.left.rawValue, x: 0x1234, y: 0x5678, wheel: 1)
         let data = report.rawData
@@ -16,6 +19,7 @@ struct InputEventTests {
         #expect(Int8(bitPattern: data[5]) == 1)
     }
 
+    /// Asserts normalized coordinates map to axis mid and max extremes.
     @Test func mouseReportFromNormalized() {
         let center = HIDMouseReport.fromNormalized(buttons: 0, normalizedX: 0.5, normalizedY: 0.5)
         #expect(abs(Int(center.x) - Int(HIDMouseReport.axisMax) / 2) <= 1)
@@ -26,6 +30,7 @@ struct InputEventTests {
         #expect(corner.y == 0)
     }
 
+    /// Asserts HID keyboard report serializes modifiers and keycodes.
     @Test func keyboardReportSerialization() {
         let report = HIDKeyboardReport(modifiers: KeyModifier.leftGUI.rawValue, keyCodes: [0x0B])
         let data = report.rawData
@@ -36,6 +41,7 @@ struct InputEventTests {
         #expect(data[2] == 0x0B)
     }
 
+    /// Asserts SimulatedInputTransport records sent events in order.
     @Test func simulatedInputTransport() async throws {
         let transport = SimulatedInputTransport()
         #expect(transport.isConnected)

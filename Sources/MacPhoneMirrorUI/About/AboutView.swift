@@ -1,9 +1,12 @@
 import MacPhoneMirrorCore
 import SwiftUI
 
+// About window content: version, copyright, branding.
+
 public struct AboutView: View {
     private let logo: Image?
 
+    /// Creates the About view with an optional app logo image.
     public init(logo: Image? = nil) {
         self.logo = logo
     }

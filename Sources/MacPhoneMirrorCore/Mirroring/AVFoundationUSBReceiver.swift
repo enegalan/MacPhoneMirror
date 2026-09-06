@@ -4,6 +4,9 @@ import CoreMedia
 import CoreVideo
 import Foundation
 
+// Captures frames from a USB-connected iPhone via AVCaptureSession.
+// Wired alternative to AirPlay when the phone appears as an external muxed screen device.
+
 public final class AVFoundationUSBReceiver: NSObject, ScreenMirrorReceiver,
     AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable
 {
@@ -28,17 +31,20 @@ public final class AVFoundationUSBReceiver: NSObject, ScreenMirrorReceiver,
         frameSubject.eraseToAnyPublisher()
     }
 
+    /// Optionally targets a specific AVCaptureDevice uniqueID; otherwise first USB phone screen.
     public init(deviceID: String? = nil) {
         targetDeviceID = deviceID
         super.init()
     }
 
+    /// Thread-safe update of `ReceiverState`.
     private func setState(_ newState: ReceiverState) {
         lock.lock()
         _state = newState
         lock.unlock()
     }
 
+    /// Maps `StreamConfiguration` quality to an AVCaptureSession preset.
     private func usbPreset() -> AVCaptureSession.Preset {
         switch StreamConfiguration.shared.quality {
         case .ultra, .high:
@@ -48,15 +54,15 @@ public final class AVFoundationUSBReceiver: NSObject, ScreenMirrorReceiver,
         }
     }
 
+    /// Discovers a USB muxed screen device and starts AVCaptureSession; throws if none found.
     public func start() async throws {
         setState(.starting)
 
         AppLogger.info("Starting AVFoundation USB Mirror Receiver...", category: .video)
 
-        // Find capture device for iPhone screen mirroring over USB
         let discoverySession = AVCaptureDevice.DiscoverySession(
             deviceTypes: [.external],
-            mediaType: .video,
+            mediaType: .muxed,
             position: .unspecified
         )
 
@@ -84,6 +90,7 @@ public final class AVFoundationUSBReceiver: NSObject, ScreenMirrorReceiver,
         }
     }
 
+    /// Configures inputs/outputs and starts capture on `sessionQueue`.
     private func configureAndStartSession(
         device: AVCaptureDevice,
         continuation: CheckedContinuation<Void, Error>
@@ -127,6 +134,7 @@ public final class AVFoundationUSBReceiver: NSObject, ScreenMirrorReceiver,
         }
     }
 
+    /// Stops the capture session asynchronously and marks state stopped.
     public func stop() {
         sessionQueue.async { [weak self] in
             guard let self else { return }
@@ -142,6 +150,7 @@ public final class AVFoundationUSBReceiver: NSObject, ScreenMirrorReceiver,
 
     // MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
 
+    /// Converts each sample buffer into a `VideoFrame` and publishes it.
     public func captureOutput(_: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from _: AVCaptureConnection) {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
@@ -160,9 +169,5 @@ public final class AVFoundationUSBReceiver: NSObject, ScreenMirrorReceiver,
         )
 
         frameSubject.send(frame)
-    }
-
-    public func captureOutput(_: AVCaptureOutput, didDrop _: CMSampleBuffer, from _: AVCaptureConnection) {
-        PerformanceMonitor.shared.recordDroppedFrame()
     }
 }

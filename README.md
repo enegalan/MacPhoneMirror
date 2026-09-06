@@ -1,7 +1,7 @@
 <p align="center">
   <img src="art/logo-brand.png" alt="MacPhoneMirror" width="400"/>
   <br>
-  <strong>Mirror your iPhone's screen on your Mac — and control it with your mouse and keyboard.</strong><br/>
+  <strong>Mirror your iPhone's screen on your Mac — and tap and drag it with your mouse or trackpad.</strong><br/>
   A fast, native macOS app that turns your Mac into a full-size iPhone display you can actually use.
 </p>
 
@@ -14,12 +14,11 @@
 
 ## What you can do
 
-* 📱 **Mirror your iPhone** — See your phone's screen on your Mac, smooth and lag-free.
-* 🖱️ **Control it from your Mac** — Use your mouse or trackpad to tap, scroll, and click on your phone.
-* ⌨️ **Type with your Mac keyboard** — Type in any iOS app, plus handy shortcuts: `⌘H` for Home, `⌘Tab` for the App Switcher, `⌘Space` for Spotlight, and `Esc` to lock.
-* 🎨 **Realistic phone frames** — Your iPhone is framed in a detailed titanium body (Natural, Black, Desert, White, Deep Purple) with an animated Dynamic Island and pressable side buttons.
-* 🪟 **One window per phone** — Each connected iPhone gets its own window, so you can mirror several devices at once and even combine them into tabs.
-* 🔒 **Private & legit** — Runs entirely on your Mac, uses Apple's official tools, and needs no jailbreak or separate app on your phone.
+* 📱 **Mirror your iPhone** — See your phone's screen on your Mac over AirPlay Screen Mirroring (or USB when available).
+* 🖱️ **Tap & drag from your Mac** — With AssistiveTouch pointer control, use mouse or trackpad taps and drags on the mirrored screen. Scroll and gestures are click-drag only (no keyboard shortcuts).
+* 🎨 **Realistic phone frames** — Titanium-style finishes (Natural, Black, Desert, White, Deep Purple).
+* 🪟 **One window per phone** — Each connected iPhone gets its own window so you can mirror several devices at once.
+* 🔒 **Private & legit** — Runs entirely on your Mac, needs no jailbreak or separate app on your phone.
 
 ---
 
@@ -29,6 +28,7 @@
 * macOS 14.0+ (Sonoma) or newer
 * An Apple Silicon (M1/M2/M3/M4) or Intel Mac
 * An iPhone that supports Screen Mirroring
+* AssistiveTouch enabled on the iPhone if you want pointer control (see the in-app Control guide)
 
 ### Run it
 ```bash
@@ -40,17 +40,9 @@ cd MacPhoneMirror
 swift run MacPhoneMirror
 ```
 
-Open **Screen Mirroring** on your iPhone and pick your Mac. Your screen will appear in its own window — ready to control right away.
-
----
-
-## Keyboard shortcuts
-
-| Shortcut | What it does            |
-| :------- | :---------------------- |
-| `⌘H`     | Go to the home screen   |
-| `⌘Tab`   | Open the app switcher   |
-| `Esc`    | Lock or wake the iPhone |
+1. Enable the AirPlay service in the **Service** tab.
+2. On iPhone, open **Screen Mirroring** and pick your Mac.
+3. Pair Bluetooth HID / enable AssistiveTouch if you want taps and drags (Control tab).
 
 ---
 
@@ -58,7 +50,7 @@ Open **Screen Mirroring** on your iPhone and pick your Mac. Your screen will app
 
 > New to the technical details? You don't need any of this to use the app.
 
-MacPhoneMirror is built on Apple's own screen-sharing and input technologies, so everything stays fast, reliable, and fully private on your machine. If you're curious about the engineering, read [FEASIBILITY.md](FEASIBILITY.md).
+MacPhoneMirror advertises as an AirPlay receiver, decodes the mirror stream on Mac, and optionally acts as a Bluetooth HID pointer for AssistiveTouch. Input is limited to absolute pointer taps and drags — not keyboard injection or system shortcuts. If you're curious about the engineering, read [FEASIBILITY.md](FEASIBILITY.md).
 
 ---
 

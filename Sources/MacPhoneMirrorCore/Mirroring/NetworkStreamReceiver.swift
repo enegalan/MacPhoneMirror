@@ -4,6 +4,9 @@ import CoreVideo
 import Foundation
 import Network
 
+// Public ScreenMirrorReceiver for AirPlay: advertises Bonjour, owns control listener,
+// and publishes decoded frames / orientation / session start-end to SessionManager.
+
 public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoDecoderDelegate, @unchecked Sendable {
     public static let shared = NetworkStreamReceiver()
 
@@ -23,7 +26,6 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
         orientationSubject.eraseToAnyPublisher()
     }
 
-    private let decoder = VideoDecoder()
     private let frameSubject = PassthroughSubject<VideoFrame, Never>()
     private let queue = DispatchQueue(label: "com.macphonemirror.network.receiver", qos: .userInteractive)
     private let lock = NSLock()
@@ -56,21 +58,23 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
         return false
     }
 
+    /// Loads identity and wires the shared mirror server to this receiver.
     override private init() {
         super.init()
-        decoder.delegate = self
         AirPlayMirrorServer.shared.configureVideoPipeline(delegate: self)
         AirPlayMirrorServer.shared.onStreamStarted = { [weak self] in
             self?.mirroringStartedSubject.send("iPhone")
         }
     }
 
+    /// Thread-safe update of `ReceiverState`.
     private func setState(_ newState: ReceiverState) {
         lock.lock()
         _state = newState
         lock.unlock()
     }
 
+    /// True when advertising/running.
     private func isRunningState() -> Bool {
         lock.lock()
         defer { lock.unlock() }
@@ -80,6 +84,7 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
         return false
     }
 
+    /// True when start should no-op because already starting or running.
     private func shouldSkipStart() -> Bool {
         lock.lock()
         defer { lock.unlock() }
@@ -91,6 +96,7 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
         }
     }
 
+    /// Advertises `_airplay._tcp` and ensures the mirror TCP server is ready.
     public func start() async throws {
         if shouldSkipStart() {
             return
@@ -107,7 +113,7 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
             return false
         }()
         if wasStopped {
-            try await Task.sleep(nanoseconds: 600_000_000)
+            try await Task.sleep(nanoseconds: AirPlayTiming.postStopRediscoverNs)
         }
 
         do {
@@ -122,6 +128,7 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
         }
     }
 
+    /// Creates the Bonjour NWListener for AirPlay control on `port`.
     private func startListener(on port: NWEndpoint.Port) async throws {
         setState(.starting)
 
@@ -143,6 +150,7 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
         }
     }
 
+    /// Installs state/connection handlers and starts `listener` on the receiver queue.
     private func bindListener(_ listener: NWListener, resumeOnce: ResumeOnce) {
         listener.stateUpdateHandler = { [weak self] state in
             self?.handleListenerState(state, listener: listener, resumeOnce: resumeOnce)
@@ -160,6 +168,7 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
         listener.start(queue: queue)
     }
 
+    /// Maps NWListener state to receiver state and resumes the start continuation once.
     private func handleListenerState(
         _ state: NWListener.State,
         listener: NWListener,
@@ -198,6 +207,7 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
         }
     }
 
+    /// Spawns an `AirPlayConnectionHandler` for one control TCP connection.
     private func handleIncomingConnection(_ connection: NWConnection) {
         let connectionID = ObjectIdentifier(connection)
         AppLogger.info("Incoming AirPlay connection from \(connection.endpoint)", category: .network)
@@ -207,8 +217,11 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
         handler.onMirroringStarted = { [weak self] deviceName in
             self?.mirroringStartedSubject.send(deviceName)
         }
-        handler.onSessionEnded = { [weak self] in
-            self?.handleConnectionEnded(connectionID)
+        handler.onSessionEnded = { [weak self, weak handler] in
+            self?.handleConnectionEnded(
+                connectionID,
+                sessionWasActive: handler?.sessionIsActive == true
+            )
         }
 
         lock.lock()
@@ -218,20 +231,44 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
         handler.start()
     }
 
-    private func handleConnectionEnded(_ connectionID: ObjectIdentifier) {
+    /// Cleans up a finished handler; full session reset only when the RTSP session was active.
+    private func handleConnectionEnded(_ connectionID: ObjectIdentifier, sessionWasActive: Bool) {
         lock.lock()
         let removed = activeHandlers.removeValue(forKey: connectionID) != nil
-        let hasActiveHandlers = !activeHandlers.isEmpty
+        let leftovers = Array(activeHandlers.values)
+        let hasActiveHandlers = !leftovers.isEmpty
         lock.unlock()
 
-        // Only the handler that was still tracked should clear session state.
-        // stop()/endCurrentSession() remove handlers first, then cancel them.
-        guard removed, !hasActiveHandlers else { return }
+        guard removed else { return }
+
+        if sessionWasActive {
+            lock.lock()
+            activeHandlers.removeAll()
+            lock.unlock()
+            for handler in leftovers {
+                handler.cancel()
+            }
+            resetSessionState()
+            sessionEndedSubject.send(())
+            return
+        }
+
+        // Short-lived sockets (GET /info, probes) must not tear down an active mirror.
+        if hasActiveHandlers || leftovers.contains(where: \.sessionIsActive)
+            || AirPlaySessionContext.shared.isSessionActive()
+        {
+            AppLogger.info(
+                "AirPlay auxiliary connection ended (activeHandlers=\(hasActiveHandlers))",
+                category: .airplay
+            )
+            return
+        }
 
         resetSessionState()
         sessionEndedSubject.send(())
     }
 
+    /// Cancels active handlers and clears session audio/timing/mirror state.
     public func endCurrentSession() {
         lock.lock()
         let handlers = Array(activeHandlers.values)
@@ -244,6 +281,7 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
         resetSessionState()
     }
 
+    /// Stops Bonjour advertising, handlers, and the mirror TCP server.
     public func stop() {
         lock.lock()
         let activeListener = listener
@@ -262,11 +300,13 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
         AppLogger.info("AirPlay receiver stopped", category: .airplay)
     }
 
+    /// stop() then start() for rediscovery after configuration changes.
     public func restart() async throws {
         stop()
         try await start()
     }
 
+    /// Stops audio/timing, resets mirror decrypt/decoder, and clears session context.
     private func resetSessionState() {
         AirPlayAudioServer.shared.stop()
         AirPlayTimingServer.shared.stop()
@@ -275,12 +315,12 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
         AirPlayMirrorServer.shared.onStreamStarted = { [weak self] in
             self?.mirroringStartedSubject.send("iPhone")
         }
-        decoder.invalidateSession()
         frameCounter = 0
         latestFrame = nil
         lastReportedOrientation = .portrait
     }
 
+    /// Publishes decoded frames and orientation changes from the H.264 pipeline.
     public func decoder(_: VideoDecoder, didOutputPixelBuffer pixelBuffer: CVPixelBuffer, presentationTime: CMTime) {
         let width = CVPixelBufferGetWidth(pixelBuffer)
         let height = CVPixelBufferGetHeight(pixelBuffer)
@@ -323,12 +363,14 @@ public final class NetworkStreamReceiver: NSObject, ScreenMirrorReceiver, VideoD
         frameSubject.send(frame)
     }
 
+    /// Most recently decoded video frame for UI snapshots, if any.
     public func latestVideoFrame() -> VideoFrame? {
         lock.lock()
         defer { lock.unlock() }
         return latestFrame
     }
 
+    /// Logs decoder failures; does not tear down the AirPlay session.
     public func decoder(_: VideoDecoder, didFailWithError error: Error) {
         AppLogger.error("Video decoder error: \(error.localizedDescription)", category: .airplay)
     }
@@ -339,10 +381,12 @@ private final class ResumeOnce: @unchecked Sendable {
     private var finished = false
     private let continuation: CheckedContinuation<Void, Error>
 
+    /// Wraps a throwing continuation so ready/failed/cancelled resume at most once.
     init(continuation: CheckedContinuation<Void, Error>) {
         self.continuation = continuation
     }
 
+    /// Resumes successfully if not already finished.
     func complete() {
         lock.lock()
         defer { lock.unlock() }
@@ -351,6 +395,7 @@ private final class ResumeOnce: @unchecked Sendable {
         continuation.resume()
     }
 
+    /// Resumes with `error` if not already finished.
     func fail(_ error: Error) {
         lock.lock()
         defer { lock.unlock() }

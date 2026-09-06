@@ -3,8 +3,11 @@ import CoreGraphics
 import Foundation
 import Testing
 
+// Unit tests for AppPreferences defaults and persistence round-trips.
+
 @Suite(.serialized)
 struct PreferencesTests {
+    /// Clears preference keys, runs the body, then restores prior UserDefaults values.
     private func withCleanPreferences(_ body: () async -> Void) async {
         let keys = [
             AppPreferences.Key.enableHardwareDecode,
@@ -13,7 +16,9 @@ struct PreferencesTests {
             AppPreferences.Key.enableMouseControl,
             AppPreferences.Key.showTouchRipples,
             AppPreferences.Key.mouseSensitivity,
-            "streamQuality",
+            AppPreferences.Key.streamQuality,
+            AppPreferences.Key.airPlayServiceEnabled,
+            AppPreferences.Key.enableAudioPlayback,
         ]
         let defaults = UserDefaults.standard
         var backup: [String: Any] = [:]
@@ -34,6 +39,16 @@ struct PreferencesTests {
         await body()
     }
 
+    /// Asserts AppPreferences.Key string constants stay stable for AppStorage.
+    @Test func preferenceKeysAreStable() {
+        #expect(AppPreferences.Key.streamQuality == "streamQuality")
+        #expect(AppPreferences.Key.airPlayServiceEnabled == "airplay.serviceEnabled")
+        #expect(AppPreferences.Key.enableHardwareDecode == "enableHardwareDecode")
+        #expect(AppPreferences.Key.enableMouseControl == "control.enableMouseControl")
+        #expect(AppPreferences.Key.enableAudioPlayback == "airplay.enableAudioPlayback")
+    }
+
+    /// Asserts factory defaults when preference keys are absent.
     @Test func appPreferencesDefaults() async {
         await withCleanPreferences {
             #expect(AppPreferences.enableHardwareDecode)
@@ -42,9 +57,11 @@ struct PreferencesTests {
             #expect(AppPreferences.showTouchRipples)
             #expect(AppPreferences.mouseSensitivity == 1.0)
             #expect(AppPreferences.frameStyle == .standard)
+            #expect(AppPreferences.enableAudioPlayback)
         }
     }
 
+    /// Asserts preference writes round-trip through UserDefaults.
     @Test func appPreferencesRoundTrip() async {
         await withCleanPreferences {
             AppPreferences.enableHardwareDecode = false
@@ -58,7 +75,6 @@ struct PreferencesTests {
             style.finish = .blackTitanium
             style.showShadow = false
             style.showReflection = false
-            style.showHardwareButtons = false
             AppPreferences.frameStyle = style
 
             #expect(!AppPreferences.enableHardwareDecode)
@@ -70,10 +86,10 @@ struct PreferencesTests {
             #expect(AppPreferences.frameStyle.finish == .blackTitanium)
             #expect(!AppPreferences.frameStyle.showShadow)
             #expect(!AppPreferences.frameStyle.showReflection)
-            #expect(!AppPreferences.frameStyle.showHardwareButtons)
         }
     }
 
+    /// Asserts ultra quality advertises larger dimensions than high at the same FPS.
     @Test func ultraAdvertisesLargerThanHigh() async {
         await withCleanPreferences {
             let ultra = StreamQuality.ultra
@@ -90,6 +106,7 @@ struct PreferencesTests {
         }
     }
 
+    /// Asserts StreamConfiguration.shared persists quality changes.
     @Test func streamConfigurationPersistsQuality() async {
         await withCleanPreferences {
             StreamConfiguration.shared.quality = .balanced
@@ -99,17 +116,7 @@ struct PreferencesTests {
         }
     }
 
-    @Test func performanceMonitorReflectsHardwarePreference() async {
-        await withCleanPreferences {
-            let monitor = PerformanceMonitor()
-            AppPreferences.enableHardwareDecode = true
-            #expect(monitor.currentStatistics().isHardwareAccelerated)
-
-            AppPreferences.enableHardwareDecode = false
-            #expect(!monitor.currentStatistics().isHardwareAccelerated)
-        }
-    }
-
+    /// Asserts disabled mouse control blocks pointer events until re-enabled.
     @Test func mouseControlGateBlocksPointerEvents() async {
         await withCleanPreferences {
             let manager = SessionManager()
@@ -121,7 +128,7 @@ struct PreferencesTests {
             let transport = SimulatedInputTransport()
             let sessionID = manager.beginMirroringSession(
                 device: device,
-                receiver: TestPatternReceiver(),
+                receiver: StubScreenMirrorReceiver(),
                 transport: transport,
                 replaceExistingAirPlay: false
             )
