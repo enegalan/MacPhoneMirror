@@ -10,6 +10,7 @@ public struct ServiceView: View {
     @State private var isEditingName = false
     @State private var isSavingName = false
     @State private var showingConnectionGuide = false
+    @State private var isPulsing = false
 
     /// Creates the Service tab bound to the shared session and pairing state.
     public init() {}
@@ -32,35 +33,34 @@ public struct ServiceView: View {
         .sheet(isPresented: $showingConnectionGuide) {
             PairingGuideView(initialTab: 1)
         }
+        .onChange(of: sessionManager.isServiceEnabled) { _, _ in updatePulse() }
+        .onChange(of: sessionManager.sessions.isEmpty) { _, _ in updatePulse() }
+        .onChange(of: sessionManager.state) { _, _ in updatePulse() }
+        .onAppear { updatePulse() }
+    }
+
+    private var serviceStatusColor: Color {
+        AirPlayServiceStatus.color(
+            isServiceEnabled: sessionManager.isServiceEnabled,
+            sessionCount: sessionManager.sessions.count,
+            state: sessionManager.state
+        )
+    }
+
+    /// Updates the waiting-for-connection pulse based on service and session state.
+    private func updatePulse() {
+        isPulsing = AirPlayServiceStatus.isWaiting(
+            isServiceEnabled: sessionManager.isServiceEnabled,
+            sessionCount: sessionManager.sessions.count,
+            state: sessionManager.state
+        )
     }
 
     private var header: some View {
         HStack(alignment: .center, spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [.accentColor, .accentColor.opacity(0.6)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 44, height: 44)
-                Image(systemName: "airplayvideo")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Service")
-                    .font(.title2.bold())
-                Text("AirPlay receiver & connected devices.")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            }
-
+            headerIcon
+            headerTitle
             Spacer()
-
             Button {
                 showingConnectionGuide = true
             } label: {
@@ -68,6 +68,41 @@ public struct ServiceView: View {
             }
             .buttonStyle(.borderedProminent)
         }
+    }
+
+    private var headerIcon: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [serviceStatusColor, serviceStatusColor.opacity(0.6)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 44, height: 44)
+            Image(systemName: "airplayvideo")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundColor(.white)
+                .opacity(isPulsing ? 0.45 : 1.0)
+                .animation(pulseAnimation, value: isPulsing)
+        }
+    }
+
+    private var headerTitle: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Service")
+                .font(.title2.bold())
+            AirPlayServiceStatusBadge(
+                isServiceEnabled: sessionManager.isServiceEnabled,
+                sessionCount: sessionManager.sessions.count,
+                state: sessionManager.state
+            )
+        }
+    }
+
+    private var pulseAnimation: Animation {
+        isPulsing ? .easeInOut(duration: 1.2).repeatForever(autoreverses: true) : .default
     }
 
     private var serviceCard: some View {

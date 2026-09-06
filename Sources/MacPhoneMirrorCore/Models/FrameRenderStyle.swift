@@ -14,6 +14,12 @@ public enum FrameFinish: String, CaseIterable, Identifiable, Codable, Sendable {
     case silver = "Silver"
     case gold = "Gold"
     case deepPurple = "Deep Purple"
+    case blueTitanium = "Blue Titanium"
+    case pacificBlue = "Pacific Blue"
+    case alpineGreen = "Alpine Green"
+    case productRed = "Product Red"
+    case pink = "Pink"
+    case ultramarine = "Ultramarine"
 
     public var id: String {
         rawValue
