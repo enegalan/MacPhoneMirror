@@ -48,28 +48,19 @@ public struct MenuBarExtraView: View {
 
     /// Updates the waiting-for-connection pulse based on service and session state.
     private func updatePulse() {
-        let shouldPulse = sessionManager.isServiceEnabled
-            && sessionManager.sessions.isEmpty
-            && !isFailedState
-        isPulsing = shouldPulse
-    }
-
-    private var isFailedState: Bool {
-        if case .failed = sessionManager.state {
-            return true
-        }
-        return false
+        isPulsing = AirPlayServiceStatus.isWaiting(
+            isServiceEnabled: sessionManager.isServiceEnabled,
+            sessionCount: sessionManager.sessions.count,
+            state: sessionManager.state
+        )
     }
 
     private var serviceIconColor: Color {
-        guard sessionManager.isServiceEnabled else { return .secondary }
-        if !sessionManager.sessions.isEmpty {
-            return .green
-        }
-        if isFailedState {
-            return .red
-        }
-        return .orange
+        AirPlayServiceStatus.color(
+            isServiceEnabled: sessionManager.isServiceEnabled,
+            sessionCount: sessionManager.sessions.count,
+            state: sessionManager.state
+        )
     }
 
     private var serviceIconBackgroundOpacity: Double {
@@ -77,7 +68,7 @@ public struct MenuBarExtraView: View {
         if !sessionManager.sessions.isEmpty {
             return 0.15
         }
-        if isFailedState {
+        if AirPlayServiceStatus.isFailed(sessionManager.state) {
             return 0.15
         }
         return 0.18
@@ -127,7 +118,7 @@ public struct MenuBarExtraView: View {
 
             HStack(spacing: 5) {
                 Circle()
-                    .fill(statusDotColor)
+                    .fill(serviceIconColor)
                     .frame(width: 6, height: 6)
                 Text(serviceStatusText)
                     .font(.system(size: 11))
@@ -162,26 +153,11 @@ public struct MenuBarExtraView: View {
     }
 
     private var serviceStatusText: String {
-        guard sessionManager.isServiceEnabled else { return "Service disabled" }
-        if !sessionManager.sessions.isEmpty {
-            let count = sessionManager.sessions.count
-            return "\(count) device\(count == 1 ? "" : "s") connected"
-        }
-        if case let .failed(message) = sessionManager.state {
-            return message
-        }
-        return "Waiting for Connection..."
-    }
-
-    private var statusDotColor: Color {
-        guard sessionManager.isServiceEnabled else { return .secondary }
-        if !sessionManager.sessions.isEmpty {
-            return .green
-        }
-        if case .failed = sessionManager.state {
-            return .red
-        }
-        return .orange
+        AirPlayServiceStatus.text(
+            isServiceEnabled: sessionManager.isServiceEnabled,
+            sessionCount: sessionManager.sessions.count,
+            state: sessionManager.state
+        )
     }
 
     /// Brings the main app window forward, opening it if needed.

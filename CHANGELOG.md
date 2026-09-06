@@ -1,19 +1,36 @@
 # Changelog
 
-## [Unreleased]
+## [1.5] - 2026-09-06
 
 ### Added
 
 - AirPlay audio playback: AES-CBC (FairPlay key/IV) + AAC-ELD / AAC-LC / ALAC decode (`ct=8/4/2`)
 - Settings toggle for audio playback
+- Regression tests for HID gesture cancellation, negative HTTP `Content-Length`, and hvcC `numArrays` offset
+- Blue Titanium, Pacific Blue, Alpine Green, Product Red, Pink, and Ultramarine chassis finishes
+
+### Fixed
+
+- BLE HID: unsubscribe from one characteristic no longer drops notifies for other active subscriptions
+- HID gestures release mouse/keyboard/consumer reports when the task is cancelled mid-sleep
+- Audio engine respects `enableAudioPlayback` (no build when off; tear down when toggled off)
+- Audio RTP: require crypto material, authenticate before advancing sequence, accept only the RTSP peer
+- `pair-verify` keeps the pair-setup Ed25519 key and returns 403 on bad signature/crypto (FairPlay `/fp-setup` still allowed without verify on the same TCP socket)
+- Bound plist `timingPort` / unknown stream `type` before narrowing; reject negative HTTP body lengths
+- Mirror stream: idle timeout after data received; handshake/plist size caps; synchronized `shouldStop`
+- USB auto-connect stops with the AirPlay service; serialized connected-device id updates
+- HEVC `parseHVCC` reads `numOfArrays` at hvcC offset 22
 
 ### Changed
 
+- Chassis finishes use distinct palettes (Black Titanium, Midnight, and Space Gray no longer share a color; same for White/Silver/Starlight and Desert/Gold)
 - README / FEASIBILITY / SECURITY: pointer taps/drags only; no keyboard shortcuts
+- FEASIBILITY / SECURITY: AirPlay FairPlay called out as repository-local UxPlay-derived (not public API)
 - Pairing guide tab renamed to "Pointer Control"
 - Removed non-functional Camera Control hardware button
 - Stable AirPlay session id; USB unplug tears down mirror session
 - AirPlay session teardown ignores auxiliary sockets; audio configure/stop serialized
+- Bluetooth permission copy describes pointer/mouse control only
 
 ### Removed
 
