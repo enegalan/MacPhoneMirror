@@ -62,7 +62,8 @@ public final class SessionManager: ObservableObject, @unchecked Sendable {
         }
 
         usbCoordinator.onDeviceAppeared = { [weak self] device in
-            Task { await self?.connectUSB(device) }
+            guard let self else { return }
+            Task { await self.connectUSB(device) }
         }
         usbCoordinator.onDeviceDisappeared = { [weak self] deviceID in
             self?.disconnect(sessionID: deviceID)
