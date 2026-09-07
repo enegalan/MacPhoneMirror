@@ -23,7 +23,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Sets `NSApp.applicationIconImage` from the bundled `app-icon.png` when available.
+    /// Sets dock icon from `app-icon.png` when running via SPM (`swift run`).
+    /// Packaged `.app` builds use `CFBundleIconFile` / `AppIcon.icns` instead.
     private func applyAppIcon() {
         if let image = AppResources.image(forResource: "app-icon", withExtension: "png") {
             NSApp.applicationIconImage = image

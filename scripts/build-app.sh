@@ -23,9 +23,11 @@ rm -rf "$PROJECT_ROOT/dist"
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources"
 
-# Copy binary
+# Copy binary and strip local symbols
 cp "$BINARY" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 chmod +x "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
+strip "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
+echo "    Stripped binary: $(du -h "$APP_BUNDLE/Contents/MacOS/$APP_NAME" | awk '{print $1}')"
 
 # Copy Info.plist (rewrite version if VERSION env var is set)
 PLIST_SRC="$PROJECT_ROOT/Sources/MacPhoneMirror/Info.plist"
@@ -40,47 +42,42 @@ if [[ -n "${VERSION:-}" ]]; then
     echo "    Version set to $VERSION (build $BUILD_NUM)"
 fi
 
-# Copy processed resources (SPM places them in a .bundle directory).
-# We rely on a custom resource loader that checks Bundle.main (Contents/Resources)
-# first and Bundle.module (SPM dev bundle) as a fallback. The .bundle is kept in
-# Contents/Resources so the code signature stays valid (no unsealed root contents).
-RESOURCE_BUNDLE="$BUILD_DIR/${APP_NAME}_${APP_NAME}.bundle"
-if [[ -d "$RESOURCE_BUNDLE" ]]; then
-    cp -R "$RESOURCE_BUNDLE" "$APP_BUNDLE/Contents/Resources/"
-    echo "    Copied SPM resource bundle to Contents/Resources"
+# Ship only what the packaged app needs:
+# - logo.png for menu bar / About (Bundle.main)
+# - AppIcon.icns for Dock / Finder (CFBundleIconFile)
+LOGO_SRC="$PROJECT_ROOT/Sources/MacPhoneMirror/Resources/logo.png"
+if [[ -f "$LOGO_SRC" ]]; then
+    cp "$LOGO_SRC" "$APP_BUNDLE/Contents/Resources/logo.png"
+    echo "    Copied logo.png"
+else
+    echo "Error: logo.png not found at $LOGO_SRC" >&2
+    exit 1
 fi
 
-# Build a proper AppIcon.icns from the dock/Finder icon (with background) and
-# register it in Info.plist. Menu bar keeps using the transparent logo.png.
-# SPM does not compile .xcassets into an .icns, and without CFBundleIconFile
-# the icon is missing.
+# Build AppIcon.icns for Dock/Finder. Cap at 512px — the 1024 (@2x of 512)
+# slot alone is ~500 KB and is not worth the bundle weight for this app.
 ICON_SRC="$PROJECT_ROOT/Sources/MacPhoneMirror/Resources/app-icon.png"
+if [[ ! -f "$ICON_SRC" ]]; then
+    ICON_SRC="$PROJECT_ROOT/art/app-icon.png"
+fi
 if [[ -f "$ICON_SRC" ]]; then
     ICONSET="$(mktemp -d)/AppIcon.iconset"
     mkdir -p "$ICONSET"
-    # mac icon sizes: icon_16x16(,@2x), icon_32x32(,@2x), icon_128x128(,@2x), icon_256x256(,@2x), icon_512x512(,@2x)
     for size in 16 32 128 256 512; do
         sips -z "$size" "$size" "$ICON_SRC" --out "$ICONSET/icon_${size}x${size}.png" >/dev/null 2>&1
         double=$((size * 2))
-        sips -z "$double" "$double" "$ICON_SRC" --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null 2>&1
+        if [[ "$double" -le 512 ]]; then
+            sips -z "$double" "$double" "$ICON_SRC" --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null 2>&1
+        fi
     done
     if iconutil -c icns "$ICONSET" -o "$APP_BUNDLE/Contents/Resources/AppIcon.icns" 2>/dev/null; then
-        echo "    Generated AppIcon.icns"
+        echo "    Generated AppIcon.icns ($(du -h "$APP_BUNDLE/Contents/Resources/AppIcon.icns" | awk '{print $1}'))"
         /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile AppIcon" "$PLIST_DST" 2>/dev/null \
             || /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$PLIST_DST"
     else
         echo "    Warning: could not generate AppIcon.icns"
     fi
     rm -rf "$(dirname "$ICONSET")"
-fi
-
-# Copy any additional resources
-EXTRA_RESOURCES="$PROJECT_ROOT/Sources/MacPhoneMirror/Resources"
-if [[ -d "$EXTRA_RESOURCES" ]]; then
-    for item in "$EXTRA_RESOURCES"/*; do
-        cp -R "$item" "$APP_BUNDLE/Contents/Resources/"
-    done
-    echo "    Copied additional resources"
 fi
 
 echo "==> Signing app bundle (ad-hoc, no Apple Developer account required)..."
@@ -135,4 +132,5 @@ if [[ "$MISSING" != "0" ]]; then
 fi
 
 echo "==> App bundle created at: $APP_BUNDLE"
-ls -la "$APP_BUNDLE"
+du -sh "$APP_BUNDLE"
+find "$APP_BUNDLE" -type f -exec du -h {} + | sort -hr
