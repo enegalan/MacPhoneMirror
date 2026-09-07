@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 
 // Maps Mac viewport clicks into normalized phone coordinates, accounting for letterboxing.
-// Returns nil outside the active screen so bezel clicks do not inject phantom touches.
+// Returns nil outside the active screen so letterbox clicks do not inject phantom touches.
 
 public protocol InputCoordinateMapper: Sendable {
     /// Maps a viewport click to normalized phone coords; nil outside the active screen area.

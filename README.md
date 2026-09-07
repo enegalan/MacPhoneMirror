@@ -16,8 +16,7 @@
 
 * 📱 **Mirror your iPhone** — See your phone's screen on your Mac over AirPlay Screen Mirroring (or USB when available).
 * 🖱️ **Tap & drag from your Mac** — With AssistiveTouch pointer control, use mouse or trackpad taps and drags on the mirrored screen. Scroll and gestures are click-drag only (no keyboard shortcuts).
-* 🎨 **Realistic phone frames** — Titanium-style finishes (Natural, Black, Desert, White, Deep Purple).
-* 🪟 **One window per phone** — Each connected iPhone gets its own window so you can mirror several devices at once.
+* 🪟 **Screen-shaped windows** — The mirror video fills the whole window (rounded like an iPhone screen). One window per phone so you can mirror several devices at once.
 * 🔒 **Private & legit** — Runs entirely on your Mac, needs no jailbreak or separate app on your phone.
 
 ---

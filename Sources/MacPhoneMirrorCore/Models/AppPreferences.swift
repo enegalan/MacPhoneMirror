@@ -7,7 +7,6 @@ public enum AppPreferences {
     public enum Key {
         public static let enableHardwareDecode = "enableHardwareDecode"
         public static let lowLatencyMode = "lowLatencyMode"
-        public static let frameStyle = "frameStyle"
         public static let enableMouseControl = "control.enableMouseControl"
         public static let showTouchRipples = "control.showTouchRipples"
         public static let mouseSensitivity = "control.mouseSensitivity"
@@ -42,20 +41,6 @@ public enum AppPreferences {
             return value ?? 1.0
         }
         set { UserDefaults.standard.set(newValue, forKey: Key.mouseSensitivity) }
-    }
-
-    public static var frameStyle: FrameRenderStyle {
-        get {
-            guard let data = UserDefaults.standard.data(forKey: Key.frameStyle),
-                  let style = try? JSONDecoder().decode(FrameRenderStyle.self, from: data)
-            else { return .standard }
-            return style
-        }
-        set {
-            if let data = try? JSONEncoder().encode(newValue) {
-                UserDefaults.standard.set(data, forKey: Key.frameStyle)
-            }
-        }
     }
 
     public static var enableAudioPlayback: Bool {

@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-// Phone orientation model used for frame layout, coordinate mapping, and stream metadata.
+// Phone orientation model used for window layout, coordinate mapping, and stream metadata.
 
 public enum DeviceOrientation: String, CaseIterable, Codable, Sendable {
     case portrait

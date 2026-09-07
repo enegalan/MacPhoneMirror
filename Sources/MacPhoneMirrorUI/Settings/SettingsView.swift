@@ -1,12 +1,10 @@
 import MacPhoneMirrorCore
 import SwiftUI
 
-// Settings tab container that hosts General / Appearance / Mirroring panes.
+// Settings tab container that hosts General and Mirroring panes.
 
 public struct SettingsView: View {
-    @ObservedObject private var frameStyleStore = FrameStyleStore.shared
-
-    /// Creates the Settings tab hosting General, Mirroring, and Appearance panes.
+    /// Creates the Settings tab hosting General and Mirroring panes.
     public init() {}
 
     public var body: some View {
@@ -16,7 +14,6 @@ public struct SettingsView: View {
 
                 GeneralSettingsView()
                 MirroringSettingsView()
-                AppearanceSettingsView(frameStyle: $frameStyleStore.style)
             }
             .padding(28)
         }

@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-// Known iPhone model catalog with native point sizes for realistic frames and mapping.
+// Known iPhone model catalog with native point sizes for screen geometry and mapping.
 // Falls back to genericModern when the exact model is unknown.
 
 public enum PhoneModel: String, CaseIterable, Identifiable, Codable, Sendable {
@@ -76,27 +76,6 @@ public enum PhoneModel: String, CaseIterable, Identifiable, Codable, Sendable {
             47.0
         case .iPhoneSE3:
             0.0
-        }
-    }
-
-    /// Hardware bezel corner radius
-    public var outerCornerRadius: CGFloat {
-        screenCornerRadius + 10.0
-    }
-
-    /// Bezel thickness around the screen
-    public var bezelThickness: CGFloat {
-        switch self {
-        case .iPhone16ProMax, .iPhone16Pro:
-            3.0
-        case .iPhone15ProMax, .iPhone15Pro, .iPhone16, .iPhone16Plus:
-            4.0
-        case .iPhone15, .iPhone15Plus, .iPhone14ProMax, .iPhone14Pro, .genericModern:
-            4.5
-        case .iPhone14, .iPhone13Pro, .iPhone13:
-            5.5
-        case .iPhoneSE3:
-            18.0
         }
     }
 

@@ -1,6 +1,6 @@
 import SwiftUI
 
-// Shared Settings section chrome so General/Appearance/Mirroring tabs look consistent.
+// Shared Settings section chrome so General/Mirroring panes look consistent.
 
 struct SettingsCard<Content: View>: View {
     let title: String

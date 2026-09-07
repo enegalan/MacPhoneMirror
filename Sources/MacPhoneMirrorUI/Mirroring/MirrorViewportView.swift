@@ -1,13 +1,12 @@
 import MacPhoneMirrorCore
 import SwiftUI
 
-// Composes phone frame + live video + input hit testing for a session window.
+// Full-bleed live video clipped to the iPhone screen shape; fills the mirror window.
 
 public struct MirrorViewportView: View {
     public let sessionID: String
     public let device: PhoneDevice
     public let orientation: DeviceOrientation
-    public let style: FrameRenderStyle
 
     @StateObject private var metalHolder = MetalViewStateHolder()
     @State private var isDragging = false
@@ -16,60 +15,29 @@ public struct MirrorViewportView: View {
     @State private var lastMoveSentAt = Date.distantPast
     @State private var ripples: [TouchRipple] = []
 
-    /// Creates the viewport for a device session with orientation and frame style.
+    /// Creates the viewport for a device session with the given orientation.
     public init(
         sessionID: String,
         device: PhoneDevice,
-        orientation: DeviceOrientation = .portrait,
-        style: FrameRenderStyle = .standard
+        orientation: DeviceOrientation = .portrait
     ) {
         self.sessionID = sessionID
         self.device = device
         self.orientation = orientation
-        self.style = style
     }
 
     public var body: some View {
         GeometryReader { proxy in
-            viewportContent(in: proxy.size)
-        }
-    }
+            let size = proxy.size
+            let radius = scaledCornerRadius(for: size)
 
-    /// Lays out the phone frame centered and scaled to fit the container.
-    private func viewportContent(in containerSize: CGSize) -> some View {
-        let naturalSize = naturalFrameSize
-        let scale = fittedScale(naturalSize: naturalSize, in: containerSize)
-        let displaySize = CGSize(
-            width: naturalSize.width * scale,
-            height: naturalSize.height * scale
-        )
-
-        return ZStack {
-            Color(nsColor: .underPageBackgroundColor).ignoresSafeArea()
-
-            VStack(spacing: 4) {
-                Spacer(minLength: 0)
-                phoneFrame(scale: scale, displaySize: displaySize)
-                Spacer(minLength: 0)
-            }
-        }
-        .onAppear { bindReceiver() }
-        .onChange(of: sessionID) { _, _ in bindReceiver() }
-    }
-
-    /// Builds the phone chrome wrapping live Metal video and touch ripples.
-    private func phoneFrame(scale: CGFloat, displaySize: CGSize) -> some View {
-        PhoneFrameView(
-            model: device.model,
-            orientation: orientation,
-            style: style,
-            sessionID: sessionID
-        ) {
             ZStack {
+                Color.black
+
                 MetalVideoView(stateHolder: metalHolder)
-                    .frame(width: screenSize.width, height: screenSize.height)
+                    .frame(width: size.width, height: size.height)
                     .contentShape(Rectangle())
-                    .gesture(pointerDragGesture)
+                    .gesture(pointerDragGesture(viewportSize: size))
 
                 ForEach(ripples) { ripple in
                     Circle()
@@ -79,19 +47,22 @@ public struct MirrorViewportView: View {
                         .allowsHitTesting(false)
                 }
             }
+            .frame(width: size.width, height: size.height)
+            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .shadow(color: .black.opacity(0.45), radius: 28, x: 0, y: 14)
         }
-        .scaleEffect(scale)
-        .frame(width: displaySize.width, height: displaySize.height)
+        .background(Color.clear)
+        .onAppear { bindReceiver() }
+        .onChange(of: sessionID) { _, _ in bindReceiver() }
     }
 
-    private var pointerDragGesture: some Gesture {
+    private func pointerDragGesture(viewportSize: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
                 guard AppPreferences.enableMouseControl else { return }
                 guard acceptingPointerGesture || isDragging else { return }
                 let point = value.location
                 let start = value.startLocation
-                let viewport = screenSize
                 let id = sessionID
                 let previous = pointerGestureTask
                 pointerGestureTask = Task { @MainActor in
@@ -103,7 +74,7 @@ public struct MirrorViewportView: View {
                         spawnRipple(at: start)
                         await SessionManager.shared.handlePointerDown(
                             at: start,
-                            viewportSize: viewport,
+                            viewportSize: viewportSize,
                             sessionID: id
                         )
                     }
@@ -113,7 +84,7 @@ public struct MirrorViewportView: View {
                     lastMoveSentAt = now
                     await SessionManager.shared.handlePointerMove(
                         at: point,
-                        viewportSize: viewport,
+                        viewportSize: viewportSize,
                         sessionID: id
                     )
                 }
@@ -121,7 +92,6 @@ public struct MirrorViewportView: View {
             .onEnded { value in
                 guard AppPreferences.enableMouseControl || isDragging else { return }
                 let point = value.location
-                let viewport = screenSize
                 let id = sessionID
                 let previous = pointerGestureTask
                 pointerGestureTask = Task { @MainActor in
@@ -129,7 +99,7 @@ public struct MirrorViewportView: View {
                     if isDragging {
                         await SessionManager.shared.handlePointerUp(
                             at: point,
-                            viewportSize: viewport,
+                            viewportSize: viewportSize,
                             sessionID: id
                         )
                         isDragging = false
@@ -163,38 +133,14 @@ public struct MirrorViewportView: View {
         }
     }
 
-    private var screenSize: CGSize {
-        orientation.orientedSize(for: device.model.pointSize)
-    }
-
-    private var naturalFrameSize: CGSize {
-        let oriented = orientation.orientedSize(for: device.model.pointSize)
-        switch style.displayMode {
-        case .borderless:
-            return oriented
-        case .minimalBezel:
-            let inset = device.model.bezelThickness * 2
-            return CGSize(width: oriented.width + inset, height: oriented.height + inset)
-        case .realisticFrame:
-            let inset = device.model.bezelThickness * 2 + 16
-            return CGSize(width: oriented.width + inset, height: oriented.height + inset)
-        }
-    }
-
-    /// Computes a fit-to-window scale factor clamped to a minimum readable size.
-    private func fittedScale(naturalSize: CGSize, in containerSize: CGSize) -> CGFloat {
-        let horizontalPadding: CGFloat = 20
-        let verticalPadding: CGFloat = 20
-
-        let availableWidth = max(containerSize.width - horizontalPadding, 1)
-        let availableHeight = max(containerSize.height - verticalPadding, 1)
-
-        let fitScale = min(
-            availableWidth / max(naturalSize.width, 1),
-            availableHeight / max(naturalSize.height, 1)
+    /// Scales the model screen corner radius to the current window size.
+    private func scaledCornerRadius(for size: CGSize) -> CGFloat {
+        let native = orientation.orientedSize(for: device.model.pointSize)
+        let scale = min(
+            size.width / max(native.width, 1),
+            size.height / max(native.height, 1)
         )
-        let preferredScale = min(fitScale, 1.0) * CGFloat(style.scaleFactor)
-        return max(min(preferredScale, fitScale), 0.05)
+        return device.model.screenCornerRadius * scale
     }
 }
 

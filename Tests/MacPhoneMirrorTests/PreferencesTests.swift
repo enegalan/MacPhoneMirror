@@ -12,7 +12,6 @@ struct PreferencesTests {
         let keys = [
             AppPreferences.Key.enableHardwareDecode,
             AppPreferences.Key.lowLatencyMode,
-            AppPreferences.Key.frameStyle,
             AppPreferences.Key.enableMouseControl,
             AppPreferences.Key.showTouchRipples,
             AppPreferences.Key.mouseSensitivity,
@@ -56,7 +55,6 @@ struct PreferencesTests {
             #expect(AppPreferences.enableMouseControl)
             #expect(AppPreferences.showTouchRipples)
             #expect(AppPreferences.mouseSensitivity == 1.0)
-            #expect(AppPreferences.frameStyle == .standard)
             #expect(AppPreferences.enableAudioPlayback)
         }
     }
@@ -70,22 +68,11 @@ struct PreferencesTests {
             AppPreferences.showTouchRipples = false
             AppPreferences.mouseSensitivity = 1.5
 
-            var style = FrameRenderStyle.standard
-            style.displayMode = .borderless
-            style.finish = .blackTitanium
-            style.showShadow = false
-            style.showReflection = false
-            AppPreferences.frameStyle = style
-
             #expect(!AppPreferences.enableHardwareDecode)
             #expect(!AppPreferences.lowLatencyMode)
             #expect(!AppPreferences.enableMouseControl)
             #expect(!AppPreferences.showTouchRipples)
             #expect(AppPreferences.mouseSensitivity == 1.5)
-            #expect(AppPreferences.frameStyle.displayMode == .borderless)
-            #expect(AppPreferences.frameStyle.finish == .blackTitanium)
-            #expect(!AppPreferences.frameStyle.showShadow)
-            #expect(!AppPreferences.frameStyle.showReflection)
         }
     }
 

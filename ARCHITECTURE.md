@@ -16,7 +16,7 @@ MacPhoneMirror is a macOS AirPlay **receiver** app with a modular Swift 6 layout
 │       MacPhoneMirrorUI         │               │      MacPhoneMirrorCore       │
 │  - MainWindowView & Sidebar    │◄──────────────┤  - SessionManager             │
 │  - Service / Control / Settings│ (State &      │  - AirPlay receiver stack     │
-│  - PhoneFrame + MetalVideo     │  Receivers)   │  - USB capture + HID input    │
+│  - MirrorViewport + MetalVideo │  Receivers)   │  - USB capture + HID input    │
 │  - MirrorSessionWindow         │               │  - Video pipeline & Metal     │
 │  - PairingGuideView            │               │  - AppLogger                  │
 └────────────────────────────────┘               └───────────────────────────────┘
@@ -72,10 +72,9 @@ Supporting AirPlay pieces: `AirPlayConnectionHandler`, `AirPlayMirrorServer`, `A
 * **`ServiceView`**: AirPlay service toggle, device name, pairing PIN when required, connected devices.
 * **`ControlConfigView`** / **`AssistiveTouchGuideView`**: Pointer control setup on iPhone.
 * **`PairingGuideView`**: How to connect walkthrough.
-* **`PhoneFrameView`**: Vector iPhone chassis.
-* **`MirrorViewportView`** / **`MetalVideoView`**: Live mirror surface and input forwarding.
-* **`MirrorSessionWindow`**: One window per mirrored device.
-* **`SettingsView`**: Quality, appearance, input, permissions, launch at login, audio toggles.
+* **`MirrorViewportView`** / **`MetalVideoView`**: Live mirror surface shaped as the iPhone screen, plus input forwarding.
+* **`MirrorSessionWindow`**: One floating screen-shaped window per mirrored device.
+* **`SettingsView`**: Quality, input, permissions, launch at login, audio toggles.
 * **`MenuBarExtraView`**: Menu bar status and quick actions.
 
 ---

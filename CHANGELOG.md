@@ -2,6 +2,10 @@
 
 ## [1.5.5] - 2026-09-07
 
+### Fixed
+
+- Packaged `.app` no longer crashes on launch: `AppResources` no longer touches SPM `Bundle.module` (that accessor `fatalError`s when the resource bundle is omitted)
+
 ### Changed
 
 - Packaged `.app` shrinks from ~4.6 MB to ~1.8 MB: strip release binary, ship only `logo.png` + `AppIcon.icns`, drop duplicate SPM resource bundle / raw `app-icon.png`

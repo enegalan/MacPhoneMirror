@@ -32,7 +32,7 @@ struct MacPhoneMirrorApp: App {
             AboutCommands()
         }
 
-        // Per-device mirror windows
+        // Per-device mirror windows (floating iPhone screen)
         WindowGroup(id: MirrorWindowID.session, for: String.self) { $sessionID in
             if sessionID.isEmpty {
                 Text("No device session")
@@ -43,9 +43,8 @@ struct MacPhoneMirrorApp: App {
         } defaultValue: {
             ""
         }
-        .windowStyle(.titleBar)
-        .windowToolbarStyle(.unified(showsTitle: true))
-        .defaultSize(width: 480, height: 860)
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 360, height: 782)
         .handlesExternalEvents(matching: [])
 
         // About window
