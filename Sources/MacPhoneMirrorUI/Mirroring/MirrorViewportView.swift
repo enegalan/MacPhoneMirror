@@ -1,7 +1,7 @@
 import MacPhoneMirrorCore
 import SwiftUI
 
-// Full-bleed live video clipped to the iPhone screen shape; fills the mirror window.
+// Full-bleed live video under the title bar; traffic lights sit on the phone screen.
 
 public struct MirrorViewportView: View {
     public let sessionID: String
@@ -29,7 +29,6 @@ public struct MirrorViewportView: View {
     public var body: some View {
         GeometryReader { proxy in
             let size = proxy.size
-            let radius = scaledCornerRadius(for: size)
 
             ZStack {
                 Color.black
@@ -48,10 +47,8 @@ public struct MirrorViewportView: View {
                 }
             }
             .frame(width: size.width, height: size.height)
-            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .shadow(color: .black.opacity(0.45), radius: 28, x: 0, y: 14)
         }
-        .background(Color.clear)
+        .background(Color.black)
         .onAppear { bindReceiver() }
         .onChange(of: sessionID) { _, _ in bindReceiver() }
     }
@@ -131,16 +128,6 @@ public struct MirrorViewportView: View {
         if let rec = SessionManager.shared.receiver(for: sessionID) {
             metalHolder.bind(to: rec)
         }
-    }
-
-    /// Scales the model screen corner radius to the current window size.
-    private func scaledCornerRadius(for size: CGSize) -> CGFloat {
-        let native = orientation.orientedSize(for: device.model.pointSize)
-        let scale = min(
-            size.width / max(native.width, 1),
-            size.height / max(native.height, 1)
-        )
-        return device.model.screenCornerRadius * scale
     }
 }
 

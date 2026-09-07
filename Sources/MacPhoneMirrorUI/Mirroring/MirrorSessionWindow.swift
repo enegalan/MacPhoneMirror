@@ -3,7 +3,7 @@ import MacPhoneMirrorCore
 import SwiftUI
 
 // One NSWindow/SwiftUI scene per mirrored device.
-// Window chrome is a floating iPhone screen (transparent, rounded, no title bar).
+// Video fills the window edge-to-edge under a transparent title bar (traffic lights on the screen).
 // Tears down on real window close only — SwiftUI onDisappear fires during reparent and was killing AirPlay mid-handshake.
 
 public struct MirrorSessionWindow: View {
@@ -25,6 +25,7 @@ public struct MirrorSessionWindow: View {
                     device: session.device,
                     orientation: session.orientation
                 )
+                .ignoresSafeArea()
                 .background(
                     MirrorWindowChrome(
                         sessionID: sessionID,
@@ -42,6 +43,8 @@ public struct MirrorSessionWindow: View {
             }
         }
         .frame(minWidth: 200, minHeight: 360)
+        .background(Color.black)
+        .ignoresSafeArea()
         .onAppear {
             // SwiftUI restores the last session window on launch with a stale id.
             // That shows "Connecting…" forever and confuses the AirPlay flow.
@@ -63,7 +66,7 @@ public struct MirrorSessionWindow: View {
     }
 }
 
-/// Configures the mirror NSWindow as a floating phone screen and disconnects on close.
+/// Configures the mirror NSWindow and disconnects on close.
 private struct MirrorWindowChrome: NSViewRepresentable {
     let sessionID: String
     let screenSize: CGSize
@@ -73,7 +76,11 @@ private struct MirrorWindowChrome: NSViewRepresentable {
         view.wantsLayer = true
         DispatchQueue.main.async {
             guard let window = view.window else { return }
-            context.coordinator.attach(to: window, sessionID: sessionID, screenSize: screenSize)
+            context.coordinator.attach(
+                to: window,
+                sessionID: sessionID,
+                screenSize: screenSize
+            )
         }
         return view
     }
@@ -81,7 +88,11 @@ private struct MirrorWindowChrome: NSViewRepresentable {
     func updateNSView(_ nsView: NSView, context: Context) {
         DispatchQueue.main.async {
             guard let window = nsView.window else { return }
-            context.coordinator.attach(to: window, sessionID: sessionID, screenSize: screenSize)
+            context.coordinator.attach(
+                to: window,
+                sessionID: sessionID,
+                screenSize: screenSize
+            )
         }
     }
 
@@ -97,7 +108,11 @@ private struct MirrorWindowChrome: NSViewRepresentable {
         private var didApplyInitialSize = false
 
         @MainActor
-        func attach(to window: NSWindow, sessionID: String, screenSize: CGSize) {
+        func attach(
+            to window: NSWindow,
+            sessionID: String,
+            screenSize: CGSize
+        ) {
             self.sessionID = sessionID
             configureChrome(window)
 
@@ -125,14 +140,23 @@ private struct MirrorWindowChrome: NSViewRepresentable {
         private func configureChrome(_ window: NSWindow) {
             window.titleVisibility = .hidden
             window.titlebarAppearsTransparent = true
+            window.titlebarSeparatorStyle = .none
             window.styleMask.insert(.fullSizeContentView)
-            window.isOpaque = false
-            window.backgroundColor = .clear
-            window.hasShadow = false
-            window.isMovableByWindowBackground = true
-            window.standardWindowButton(.closeButton)?.isHidden = true
-            window.standardWindowButton(.miniaturizeButton)?.isHidden = true
-            window.standardWindowButton(.zoomButton)?.isHidden = true
+            // Opaque so the title-bar strip is video/black, not a see-through header.
+            window.isOpaque = true
+            window.backgroundColor = .black
+            window.hasShadow = true
+            window.isMovableByWindowBackground = false
+            window.standardWindowButton(.closeButton)?.isHidden = false
+            window.standardWindowButton(.miniaturizeButton)?.isHidden = false
+            window.standardWindowButton(.zoomButton)?.isHidden = false
+
+            if let contentView = window.contentView {
+                contentView.wantsLayer = true
+                contentView.layer?.backgroundColor = NSColor.black.cgColor
+                contentView.layer?.cornerRadius = 0
+                contentView.layer?.masksToBounds = false
+            }
         }
 
         @MainActor
