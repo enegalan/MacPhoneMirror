@@ -50,7 +50,6 @@ let package = Package(
             path: "Sources/MacPhoneMirror",
             exclude: ["Info.plist"],
             resources: [
-                .process("Assets.xcassets"),
                 .process("Resources"),
             ],
             linkerSettings: [
