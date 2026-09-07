@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.5.5] - 2026-09-07
+
+### Changed
+
+- Packaged `.app` shrinks from ~4.6 MB to ~1.8 MB: strip release binary, ship only `logo.png` + `AppIcon.icns`, drop duplicate SPM resource bundle / raw `app-icon.png`
+- Menu-bar / About logo resized to 256px; Dock iconset capped at 512px (no 1024 slot)
+- Removed unused `Assets.xcassets` from the package; SPM `swift run` still loads dock icon from `Resources/app-icon.png`
+
+---
+
 ## [1.5] - 2026-09-06
 
 ### Added
