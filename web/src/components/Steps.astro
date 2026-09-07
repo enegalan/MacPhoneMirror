@@ -1,0 +1,193 @@
+---
+const steps = [
+  {
+    n: '01',
+    title: 'Launch MacPhoneMirror',
+    body: 'Open the app on your Mac and enable the AirPlay service in the Service tab.',
+    icon: `<rect x="4.5" y="5.5" width="15" height="11" rx="1.5"/><path d="M8 19.5h8M12 16.5v3"/><path d="m10 9.5 4 2-4 2V9.5Z"/>`,
+    accent: '#00c2ff',
+    accentRgb: '0, 194, 255',
+  },
+  {
+    n: '02',
+    title: 'Connect from iPhone',
+    body: 'Open Control Center, tap Screen Mirroring, and select your Mac.',
+    icon: `<rect x="8" y="3.5" width="8" height="14" rx="1.8"/><path d="M10.5 15.5h3"/><path d="M5.5 8.5A8 8 0 0 0 5.5 15.5M18.5 8.5A8 8 0 0 1 18.5 15.5"/>`,
+    accent: '#4d8cff',
+    accentRgb: '77, 140, 255',
+  },
+  {
+    n: '03',
+    title: 'Tap & drag',
+    body: 'Pair Bluetooth HID and enable AssistiveTouch if you want pointer taps and drags from mouse or trackpad.',
+    icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M15.042 21.672 13.684 16.6m0 0-2.51 2.225.569-9.47 5.227 7.917-3.286-.672ZM12 2.25V4.5m5.834.166-1.591 1.591M20.25 10.5H18M7.757 14.743l-1.59 1.59M6 10.5H3.75m4.007-4.243-1.59-1.59" />`,
+    accent: '#af52ff',
+    accentRgb: '175, 82, 255',
+  },
+];
+---
+
+<section class="section steps-section" id="how-it-works">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">How it works</p>
+      <h2>Three steps. That's it.</h2>
+      <p>Same local Wi‑Fi (or USB). Your Mac becomes the AirPlay target.</p>
+    </div>
+    <ol class="steps">
+      {
+        steps.map((step, i) => (
+          <li style={`--i: ${i}; --accent: ${step.accent}; --accent-rgb: ${step.accentRgb};`}>
+            <div class="step-top">
+              <span class="step-icon" aria-hidden="true">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" set:html={step.icon}></svg>
+              </span>
+              <span class="n">{step.n}</span>
+            </div>
+            <div>
+              <h3>{step.title}</h3>
+              <p>{step.body}</p>
+            </div>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+</section>
+
+<style>
+  .steps-section {
+    position: relative;
+  }
+
+  .steps-section::before {
+    content: "";
+    position: absolute;
+    inset: 8% 0 auto;
+    height: 180px;
+    background:
+      radial-gradient(ellipse 40% 80% at 20% 40%, rgba(0, 194, 255, 0.08), transparent 70%),
+      radial-gradient(ellipse 40% 80% at 80% 50%, rgba(175, 82, 255, 0.07), transparent 70%);
+    pointer-events: none;
+  }
+
+  .steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 1.25rem;
+    position: relative;
+  }
+
+  @media (min-width: 800px) {
+    .steps {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.75rem;
+    }
+
+    .steps::before {
+      content: "";
+      position: absolute;
+      top: 2.65rem;
+      left: 12%;
+      right: 12%;
+      height: 1px;
+      background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(0, 194, 255, 0.35),
+        rgba(77, 140, 255, 0.4),
+        rgba(175, 82, 255, 0.35),
+        transparent
+      );
+      pointer-events: none;
+      z-index: 0;
+    }
+  }
+
+  li {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    gap: 1.25rem;
+    padding: 1.6rem 1.4rem 1.7rem;
+    border-radius: 20px;
+    background:
+      linear-gradient(165deg, rgba(var(--accent-rgb), 0.1), rgba(255, 255, 255, 0.02) 55%),
+      var(--surface);
+    border: 1px solid rgba(var(--accent-rgb), 0.28);
+    backdrop-filter: blur(12px);
+    transition:
+      transform 0.3s ease,
+      border-color 0.3s ease,
+      box-shadow 0.3s ease;
+    animation: rise-in 0.7s ease both;
+    animation-delay: calc(var(--i) * 0.12s);
+  }
+
+  li:hover {
+    transform: translateY(-5px);
+    border-color: rgba(var(--accent-rgb), 0.55);
+    box-shadow:
+      0 18px 40px rgba(0, 0, 0, 0.28),
+      0 0 0 1px rgba(var(--accent-rgb), 0.12);
+  }
+
+  .step-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .step-icon {
+    display: grid;
+    place-items: center;
+    width: 3.25rem;
+    height: 3.25rem;
+    color: var(--accent);
+    border-radius: 14px;
+    border: 1px solid rgba(var(--accent-rgb), 0.35);
+    background:
+      radial-gradient(circle at 30% 25%, rgba(var(--accent-rgb), 0.28), transparent 55%),
+      var(--surface-strong);
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  li:hover .step-icon {
+    border-color: rgba(var(--accent-rgb), 0.6);
+    box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.12);
+  }
+
+  .step-icon :global(svg) {
+    display: block;
+  }
+
+  .step-icon :global(path),
+  .step-icon :global(rect) {
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .n {
+    font-family: var(--font-display);
+    font-size: 1.65rem;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    color: var(--accent);
+    line-height: 1;
+  }
+
+  h3 {
+    font-size: 1.22rem;
+    margin-bottom: 0.5rem;
+  }
+
+  p {
+    color: var(--ink-soft);
+    font-size: 0.98rem;
+  }
+</style>

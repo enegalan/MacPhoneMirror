@@ -1,0 +1,67 @@
+---
+const download = 'https://github.com/enegalan/MacPhoneMirror/releases/latest';
+const github = 'https://github.com/enegalan/MacPhoneMirror';
+---
+
+<section class="section cta">
+  <div class="wrap cta-inner">
+    <p class="eyebrow">Get started</p>
+    <h2>Ready to try?</h2>
+    <p>Download MacPhoneMirror and start mirroring in seconds.</p>
+    <div class="actions">
+      <a class="btn btn-primary" href={download}>Download for Mac</a>
+      <a class="btn btn-ghost" href={github} target="_blank" rel="noopener noreferrer">Star on GitHub</a>
+    </div>
+    <p class="note">Requires macOS 14.0 or later</p>
+  </div>
+</section>
+
+<style>
+  .cta {
+    padding-bottom: 4.5rem;
+  }
+
+  .cta-inner {
+    position: relative;
+    overflow: hidden;
+    text-align: center;
+    padding: 4rem 1.5rem;
+    border-radius: 24px;
+    background:
+      radial-gradient(ellipse 80% 70% at 20% 0%, rgba(0, 194, 255, 0.12), transparent 55%),
+      radial-gradient(ellipse 70% 60% at 90% 100%, rgba(175, 82, 255, 0.1), transparent 50%),
+      var(--surface);
+    border: 1px solid var(--line);
+  }
+
+  h2 {
+    position: relative;
+    font-size: clamp(2rem, 4.2vw, 2.8rem);
+  }
+
+  .eyebrow,
+  p,
+  .actions,
+  .note {
+    position: relative;
+  }
+
+  p {
+    margin-top: 0.75rem;
+    color: var(--ink-soft);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.8rem;
+    margin-top: 1.65rem;
+  }
+
+  .note {
+    margin-top: 1.05rem;
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+</style>

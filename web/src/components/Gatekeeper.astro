@@ -1,0 +1,255 @@
+---
+const items = [
+  {
+    title: 'Gatekeeper prompt',
+    body: 'On first launch, macOS may show a security prompt for apps downloaded outside the App Store. Click Done to continue.',
+    image: '/how-it-works/step1.webp',
+    alt: 'macOS dialog saying MacPhoneMirror.app was not opened',
+    width: 560,
+    height: 566,
+  },
+  {
+    title: 'Allow in Settings',
+    body: 'Open System Settings → Privacy & Security, scroll to Security, and click Open Anyway next to MacPhoneMirror.',
+    image: '/how-it-works/step2.webp',
+    alt: 'System Settings Privacy & Security with Open Anyway for MacPhoneMirror',
+    width: 1486,
+    height: 1720,
+  },
+  {
+    title: "You're all set",
+    body: 'Confirm once more in the dialog and the app launches. This is a one-time step — later launches work instantly.',
+    image: '/how-it-works/step3.webp',
+    alt: 'macOS confirmation dialog to open MacPhoneMirror with Open Anyway',
+    width: 560,
+    height: 566,
+  },
+];
+---
+
+<section class="section gatekeeper" id="getting-started">
+  <div class="wrap">
+    <div class="gk-panel">
+      <div class="gk-head">
+        <div class="gk-labels">
+          <p class="eyebrow">Getting started</p>
+          <span class="size-badge">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M8 2v8m0 0L5 7m3 3 3-3M3 12.5h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Only ~1.5 MB
+          </span>
+        </div>
+        <h2>First launch on macOS</h2>
+        <p>
+          Gatekeeper may ask once for apps outside the App Store. Quick setup, then you are ready to mirror.
+        </p>
+      </div>
+
+      <ol class="gk-steps">
+        {
+          items.map((item, index) => (
+            <li style={`--i: ${index}`}>
+              <div class="step-copy">
+                <span class="dot">{index + 1}</span>
+                <div>
+                  <h3>{item.title}</h3>
+                  <p>{item.body}</p>
+                </div>
+              </div>
+                <img
+                  src={item.image}
+                  alt={item.alt}
+                  width={item.width}
+                  height={item.height}
+                  loading="lazy"
+                  decoding="async"
+                />
+            </li>
+          ))
+        }
+      </ol>
+    </div>
+  </div>
+</section>
+
+<style>
+  .gatekeeper {
+    padding-block: 5rem;
+  }
+
+  .gk-panel {
+    position: relative;
+    overflow: hidden;
+    display: grid;
+    gap: 2rem;
+    padding: clamp(1.75rem, 4vw, 2.75rem);
+    border-radius: 28px;
+    border: 1px solid rgba(0, 194, 255, 0.18);
+    background:
+      linear-gradient(135deg, rgba(0, 194, 255, 0.06) 0%, transparent 42%),
+      linear-gradient(320deg, rgba(175, 82, 255, 0.07) 0%, transparent 45%),
+      linear-gradient(180deg, #0c1422 0%, #080e18 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.04),
+      0 24px 60px rgba(0, 0, 0, 0.35);
+  }
+
+  .gk-panel::before {
+    content: "";
+    position: absolute;
+    top: -40%;
+    right: -15%;
+    width: min(420px, 70%);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(77, 140, 255, 0.14), transparent 68%);
+    pointer-events: none;
+  }
+
+  .gk-head {
+    position: relative;
+    z-index: 1;
+    max-width: 36rem;
+  }
+
+  .gk-labels {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1rem;
+    margin-bottom: 0.85rem;
+  }
+
+  .gk-labels .eyebrow {
+    margin-bottom: 0;
+  }
+
+  .size-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.7rem;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: #9fe8ff;
+    background: rgba(0, 194, 255, 0.12);
+    border: 1px solid rgba(0, 194, 255, 0.3);
+  }
+
+  .gk-head h2 {
+    font-size: clamp(1.9rem, 3.8vw, 2.65rem);
+  }
+
+  .gk-head > p {
+    margin-top: 0.85rem;
+    color: var(--ink-soft);
+    font-size: 1.05rem;
+  }
+
+  .gk-steps {
+    position: relative;
+    z-index: 1;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 1.1rem;
+  }
+
+  li {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    gap: 1rem;
+    padding: 1.15rem 1.1rem 1.2rem;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(242, 247, 251, 0.08);
+    animation: rise-in 0.65s ease both;
+    animation-delay: calc(var(--i) * 0.1s);
+  }
+
+  .step-copy {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.75rem;
+    align-items: start;
+  }
+
+  .dot {
+    display: grid;
+    place-items: center;
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 9px;
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #041018;
+    background: linear-gradient(135deg, #5ce1ff 0%, #7eb6ff 50%, #c084ff 100%);
+  }
+
+  h3 {
+    font-size: 1.05rem;
+    margin-bottom: 0.3rem;
+  }
+
+  .step-copy p {
+    color: var(--ink-soft);
+    font-size: 0.88rem;
+    line-height: 1.45;
+  }
+
+  .shot {
+    margin: 0;
+    display: grid;
+    place-items: center;
+    min-height: 0;
+    padding: 0.65rem;
+    border-radius: 14px;
+    border: 1px solid rgba(242, 247, 251, 0.1);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent),
+      #060a12;
+  }
+
+  .shot img {
+    width: auto;
+    max-width: 100%;
+    height: auto;
+    max-height: 168px;
+    display: block;
+    object-fit: contain;
+    object-position: center;
+  }
+
+  @media (min-width: 800px) {
+    .gk-panel {
+      gap: 2.25rem;
+      padding: 2.5rem 2.75rem;
+    }
+
+    .gk-steps {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.25rem;
+      align-items: stretch;
+    }
+
+    li {
+      gap: 1.1rem;
+      padding: 1.2rem 1.15rem 1.25rem;
+    }
+
+    .shot img {
+      max-height: 200px;
+    }
+  }
+
+  @media (min-width: 1100px) {
+    .shot img {
+      max-height: 220px;
+    }
+  }
+</style>

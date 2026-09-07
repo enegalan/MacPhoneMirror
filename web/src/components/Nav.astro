@@ -1,0 +1,79 @@
+---
+const github = 'https://github.com/enegalan/MacPhoneMirror';
+const download = 'https://github.com/enegalan/MacPhoneMirror/releases/latest';
+---
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="#top" aria-label="MacPhoneMirror home">
+      <img src="/app-icon.png" alt="" width="36" height="36" />
+      <span>MacPhoneMirror</span>
+    </a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#features">Features</a>
+      <a href="#how-it-works">How it works</a>
+      <a href={github} target="_blank" rel="noopener noreferrer">GitHub</a>
+      <a class="btn btn-primary nav-cta" href={download}>Download</a>
+    </nav>
+  </div>
+</header>
+
+<style>
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    padding: 0.95rem 0;
+    backdrop-filter: blur(18px) saturate(1.2);
+    background: rgba(5, 7, 12, 0.72);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .nav-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.7rem;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 1.05rem;
+    letter-spacing: -0.02em;
+  }
+
+  .brand img {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 1.4rem;
+    font-size: 0.94rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+
+  .nav-links a:not(.btn):hover {
+    color: var(--ink);
+  }
+
+  .nav-cta {
+    padding: 0.58rem 1.05rem;
+    font-size: 0.88rem;
+  }
+
+  @media (max-width: 720px) {
+    .nav-links a:not(.nav-cta) {
+      display: none;
+    }
+  }
+</style>

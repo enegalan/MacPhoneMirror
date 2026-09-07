@@ -1,0 +1,142 @@
+---
+const features = [
+  {
+    title: 'Screen mirroring',
+    body: 'Receive AirPlay Screen Mirroring (and USB when available) so your iPhone appears on your Mac in real time.',
+    icon: `<path d="M6 3.5h12a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 18 14.5H6A1.5 1.5 0 0 1 4.5 13V5A1.5 1.5 0 0 1 6 3.5Z"/><path d="M9 18.5h6M12 14.5v4"/>`,
+  },
+  {
+    title: 'Tap & drag control',
+    body: 'With AssistiveTouch pointer control, use your mouse or trackpad for taps and drags on the mirrored screen.',
+    icon: `<path d="M9 4.5v9.2l2.4-2.1 1.6 3.7 2.1-.9-1.6-3.7H17L9 4.5Z"/>`,
+  },
+  {
+    title: 'Floating phone screens',
+    body: 'The AirPlay video fills the whole mirror window. Rounded corners like an iPhone screen — drag it around your desktop.',
+    icon: `<rect x="7.5" y="3.5" width="9" height="17" rx="2"/><path d="M10.5 17.5h3"/>`,
+  },
+  {
+    title: 'Multi-device windows',
+    body: 'Each connected iPhone gets its own screen-shaped window so you can mirror several devices side by side.',
+    icon: `<rect x="4.5" y="6.5" width="9" height="13" rx="1.5"/><path d="M10.5 4.5h9v13a1.5 1.5 0 0 1-1.5 1.5"/>`,
+  },
+  {
+    title: 'Audio playback',
+    body: 'Stream audio from the mirrored session to your Mac speakers with hardware-friendly decoding.',
+    icon: `<path d="M5.5 9.5v5h3.2L13.5 19V5L8.7 9.5H5.5Z"/><path d="M16 9.2a3.2 3.2 0 0 1 0 5.6M18.2 7a5.5 5.5 0 0 1 0 10"/>`,
+  },
+  {
+    title: 'Native & private',
+    body: 'Runs entirely on your Mac — no jailbreak, no cloud relay, MIT licensed.',
+    icon: `<path d="M12 3.5 19.5 7v5.2c0 4.2-3 7.4-7.5 8.8-4.5-1.4-7.5-4.6-7.5-8.8V7L12 3.5Z"/><path d="m9.2 12 1.9 1.9 3.7-3.8"/>`,
+  },
+];
+---
+
+<section class="section" id="features">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Features</p>
+      <h2>Built to use — not just watch.</h2>
+      <p>Simple AirPlay setup, pointer control, and a window that is the phone screen.</p>
+    </div>
+    <ul class="feature-list">
+      {
+        features.map((feature) => (
+          <li>
+            <div class="feature-title">
+              <span class="feature-icon" aria-hidden="true">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" set:html={feature.icon}></svg>
+              </span>
+              <h3>{feature.title}</h3>
+            </div>
+            <p>{feature.body}</p>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</section>
+
+<style>
+  .feature-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .feature-list li {
+    display: grid;
+    gap: 0.55rem;
+    padding: 1.75rem 0;
+    border-bottom: 1px solid var(--line);
+    transition: background 0.25s ease, padding-left 0.25s ease;
+  }
+
+  .feature-list li:hover {
+    padding-left: 0.35rem;
+  }
+
+  .feature-list li:hover h3 {
+    background: var(--brand);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .feature-list li:hover .feature-icon {
+    color: var(--cyan);
+    border-color: rgba(0, 183, 255, 0.35);
+  }
+
+  .feature-title {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+  }
+
+  .feature-icon {
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    color: var(--ink-soft);
+    border: 1px solid var(--line);
+    border-radius: 0.7rem;
+    background: var(--surface);
+    transition: color 0.25s ease, border-color 0.25s ease;
+  }
+
+  .feature-icon :global(svg) {
+    display: block;
+  }
+
+  .feature-icon :global(path),
+  .feature-icon :global(rect) {
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  @media (min-width: 760px) {
+    .feature-list li {
+      grid-template-columns: 18rem 1fr;
+      gap: 2.25rem;
+      align-items: center;
+    }
+  }
+
+  h3 {
+    font-size: 1.22rem;
+    transition: color 0.25s ease;
+  }
+
+  p {
+    color: var(--ink-soft);
+  }
+</style>
