@@ -4,8 +4,8 @@
   --ink-soft: #6a635a;
   --muted: #958d82;
   --line: rgba(28, 25, 21, 0.1);
-  --accent: #00a3ff;
-  --brand: linear-gradient(120deg, #03b1ef 0%, #3a61f2 50%, #7f58ff 100%);
+  --accent: #006bb8;
+  --brand: linear-gradient(120deg, #0277b3 0%, #1d4ed8 50%, #6d28d9 100%);
   --surface: rgba(255, 252, 247, 0.72);
   --max: 1080px;
   --font-display: "Sora", "Avenir Next", "Segoe UI", sans-serif;
