@@ -37,19 +37,17 @@ const features = [
   <div class="wrap">
     <div class="section-head">
       <p class="eyebrow">Features</p>
-      <h2>Built to use — not just watch.</h2>
+      <h2>Built to use — not just watch</h2>
       <p>Simple AirPlay setup, pointer control, and a window that is the phone screen.</p>
     </div>
-    <ul class="feature-list">
+    <ul class="feature-grid">
       {
         features.map((feature) => (
           <li>
-            <div class="feature-title">
-              <span class="feature-icon" aria-hidden="true">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" set:html={feature.icon}></svg>
-              </span>
-              <h3>{feature.title}</h3>
-            </div>
+            <span class="feature-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" set:html={feature.icon}></svg>
+            </span>
+            <h3>{feature.title}</h3>
             <p>{feature.body}</p>
           </li>
         ))
@@ -59,56 +57,46 @@ const features = [
 </section>
 
 <style>
-  .feature-list {
+  .feature-grid {
     list-style: none;
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 0;
-    border-top: 1px solid var(--line);
+    gap: 2rem 1.75rem;
   }
 
-  .feature-list li {
+  @media (min-width: 640px) {
+    .feature-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (min-width: 960px) {
+    .feature-grid {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2.5rem 2rem;
+    }
+  }
+
+  li {
     display: grid;
     gap: 0.55rem;
-    padding: 1.75rem 0;
-    border-bottom: 1px solid var(--line);
-    transition: background 0.25s ease, padding-left 0.25s ease;
-  }
-
-  .feature-list li:hover {
-    padding-left: 0.35rem;
-  }
-
-  .feature-list li:hover h3 {
-    background: var(--brand);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
-
-  .feature-list li:hover .feature-icon {
-    color: var(--cyan);
-    border-color: rgba(0, 183, 255, 0.35);
-  }
-
-  .feature-title {
-    display: flex;
-    align-items: center;
-    gap: 0.85rem;
+    align-content: start;
   }
 
   .feature-icon {
-    flex-shrink: 0;
     display: grid;
     place-items: center;
-    width: 2.5rem;
-    height: 2.5rem;
-    color: var(--ink-soft);
-    border: 1px solid var(--line);
-    border-radius: 0.7rem;
-    background: var(--surface);
-    transition: color 0.25s ease, border-color 0.25s ease;
+    width: 2.55rem;
+    height: 2.55rem;
+    margin-bottom: 0.25rem;
+    color: var(--accent);
+    border-radius: 12px;
+    background:
+      radial-gradient(circle at 28% 28%, rgba(3, 177, 239, 0.28), transparent 55%),
+      radial-gradient(circle at 80% 70%, rgba(127, 88, 255, 0.18), transparent 50%),
+      rgba(0, 163, 255, 0.08);
+    border: 1px solid rgba(0, 163, 255, 0.14);
   }
 
   .feature-icon :global(svg) {
@@ -123,20 +111,13 @@ const features = [
     stroke-linejoin: round;
   }
 
-  @media (min-width: 760px) {
-    .feature-list li {
-      grid-template-columns: 18rem 1fr;
-      gap: 2.25rem;
-      align-items: center;
-    }
-  }
-
   h3 {
-    font-size: 1.22rem;
-    transition: color 0.25s ease;
+    font-size: 1.15rem;
+    font-weight: 600;
   }
 
   p {
     color: var(--ink-soft);
+    font-size: 0.98rem;
   }
 </style>

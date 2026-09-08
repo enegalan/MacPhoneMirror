@@ -105,20 +105,11 @@ const faqs = [
 <style>
   .faq {
     display: grid;
-    gap: 0.65rem;
+    border-top: 1px solid var(--line);
   }
 
   details {
-    padding: 0.15rem 1.15rem;
-    border-radius: 14px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    transition: border-color 0.25s ease, background 0.25s ease;
-  }
-
-  details[open] {
-    background: var(--surface-strong);
-    border-color: rgba(0, 194, 255, 0.28);
+    border-bottom: 1px solid var(--line);
   }
 
   summary {
@@ -128,7 +119,7 @@ const faqs = [
     font-weight: 600;
     letter-spacing: -0.02em;
     list-style: none;
-    padding: 1rem 1.75rem 1rem 0;
+    padding: 1.15rem 1.75rem 1.15rem 0;
     position: relative;
   }
 
@@ -141,24 +132,22 @@ const faqs = [
     position: absolute;
     right: 0;
     top: 50%;
-    transform: translateY(-50%) rotate(0deg);
-    color: var(--cyan);
+    transform: translateY(-50%);
+    color: var(--accent);
     font-family: var(--font-body);
     font-weight: 500;
-    font-size: 1.2rem;
+    font-size: 1.25rem;
     line-height: 1;
-    transition: transform 0.3s ease, opacity 0.2s ease;
   }
 
   details[open] summary::after {
     content: '−';
-    transform: translateY(-50%) rotate(180deg);
   }
 
   .answer {
     height: 0;
     overflow: hidden;
-    transition: height 0.35s ease;
+    transition: height 0.3s ease;
   }
 
   details[open] .answer {
@@ -166,12 +155,12 @@ const faqs = [
   }
 
   .answer-inner p {
-    padding: 0 0 1.05rem;
+    padding: 0 0 1.15rem;
     color: var(--ink-soft);
     max-width: 48rem;
     opacity: 0;
-    transform: translateY(-6px);
-    transition: opacity 0.28s ease 0.05s, transform 0.28s ease 0.05s;
+    transform: translateY(-4px);
+    transition: opacity 0.25s ease 0.04s, transform 0.25s ease 0.04s;
   }
 
   details[open] .answer-inner p {
@@ -181,8 +170,7 @@ const faqs = [
 
   @media (prefers-reduced-motion: reduce) {
     .answer,
-    .answer-inner p,
-    summary::after {
+    .answer-inner p {
       transition: none;
     }
   }
