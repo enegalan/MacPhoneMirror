@@ -23,7 +23,4 @@ Output goes to `dist/`.
 1. Import the GitHub repo in [Vercel](https://vercel.com).
 2. Set **Root Directory** to `web`.
 3. Framework preset: Astro (build `npm run build`, output `dist`).
-4. Deploy. Point a custom domain later in Vercel project settings.
-
-Download CTAs link to the latest GitHub Release:
-`https://github.com/enegalan/MacPhoneMirror/releases/latest`
+4. Deploy.
