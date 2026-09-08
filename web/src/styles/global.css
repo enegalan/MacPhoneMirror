@@ -147,6 +147,7 @@ p {
   color: #041018;
   background: linear-gradient(120deg, #5ce1ff 0%, #7eb6ff 45%, #c084ff 100%);
   box-shadow: 0 12px 36px rgba(0, 183, 255, 0.22);
+  border-color: black;
 }
 
 .btn-primary:hover {
