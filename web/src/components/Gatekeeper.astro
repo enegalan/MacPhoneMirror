@@ -1,0 +1,145 @@
+---
+const items = [
+  {
+    title: 'Gatekeeper prompt',
+    body: 'On first launch, macOS may show a security prompt for apps downloaded outside the App Store. Click Done to continue.',
+    image: '/how-it-works/step1.webp',
+    alt: 'macOS dialog saying MacPhoneMirror.app was not opened',
+    width: 560,
+    height: 566,
+  },
+  {
+    title: 'Allow in Settings',
+    body: 'Open System Settings → Privacy & Security, scroll to Security, and click Open Anyway next to MacPhoneMirror.',
+    image: '/how-it-works/step2.webp',
+    alt: 'System Settings Privacy & Security with Open Anyway for MacPhoneMirror',
+    width: 1486,
+    height: 1720,
+  },
+  {
+    title: "You're all set",
+    body: 'Confirm once more in the dialog and the app launches. This is a one-time step — later launches work instantly.',
+    image: '/how-it-works/step3.webp',
+    alt: 'macOS confirmation dialog to open MacPhoneMirror with Open Anyway',
+    width: 560,
+    height: 566,
+  },
+];
+---
+
+<section class="section gatekeeper" id="getting-started">
+  <div class="wrap">
+    <div class="gk-head">
+      <p class="eyebrow">Getting started</p>
+      <h2>First launch on macOS</h2>
+      <p>
+        Gatekeeper may ask once for apps outside the App Store. Quick setup, then you are ready to mirror.
+      </p>
+    </div>
+
+    <ol class="gk-steps">
+      {
+        items.map((item, index) => (
+          <li>
+            <div class="step-copy">
+              <span class="dot">{index + 1}</span>
+              <div>
+                <h3>{item.title}</h3>
+                <p>{item.body}</p>
+              </div>
+            </div>
+            <img
+              src={item.image}
+              alt={item.alt}
+              width={item.width}
+              height={item.height}
+              loading="lazy"
+              decoding="async"
+            />
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+</section>
+
+<style>
+  .gk-head {
+    max-width: 36rem;
+    margin-bottom: 2.75rem;
+  }
+
+  .gk-head h2 {
+    font-size: clamp(1.9rem, 3.8vw, 2.65rem);
+  }
+
+  .gk-head > p {
+    margin-top: 0.85rem;
+    color: var(--ink-soft);
+    font-size: 1.05rem;
+  }
+
+  .gk-steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 2rem;
+  }
+
+  li {
+    display: grid;
+    gap: 1.1rem;
+    align-content: start;
+  }
+
+  .step-copy {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.75rem;
+    align-items: start;
+  }
+
+  .dot {
+    display: grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 8px;
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #fff;
+    background: var(--brand);
+  }
+
+  h3 {
+    font-size: 1.1rem;
+    margin-bottom: 0.3rem;
+  }
+
+  .step-copy p {
+    color: var(--ink-soft);
+    font-size: 0.92rem;
+    line-height: 1.5;
+  }
+
+  img {
+    width: 100%;
+    max-width: 280px;
+    height: auto;
+    margin: 0 auto;
+    border-radius: 12px;
+  }
+
+  @media (min-width: 800px) {
+    .gk-steps {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2rem;
+    }
+
+    img {
+      max-width: 100%;
+    }
+  }
+</style>

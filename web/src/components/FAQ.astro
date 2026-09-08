@@ -1,0 +1,177 @@
+---
+const faqs = [
+  {
+    q: 'What is MacPhoneMirror?',
+    a: 'MacPhoneMirror is a free, open-source macOS app that turns your Mac into an AirPlay Screen Mirroring receiver. Your iPhone video fills a floating, screen-shaped window, with optional AssistiveTouch pointer control so you can tap and drag from mouse or trackpad.',
+  },
+  {
+    q: 'Is it really free?',
+    a: 'Yes. The entire app is MIT licensed on GitHub. No watermark, no paid tier, no subscription.',
+  },
+  {
+    q: 'How is this different from Apple’s iPhone Mirroring or an Apple TV?',
+    a: 'Apple’s Continuity iPhone Mirroring is unavailable in some regions. MacPhoneMirror is a local AirPlay receiver you run yourself. Unlike an Apple TV, it uses your Mac display directly — ideal for demos, development, and everyday control.',
+  },
+  {
+    q: 'Which devices are compatible?',
+    a: 'macOS 14 (Sonoma) or newer on Apple Silicon or Intel. Any iPhone that supports Screen Mirroring. Both devices should share a local network for wireless AirPlay; USB may be available depending on your setup.',
+  },
+  {
+    q: 'Does it work without Wi‑Fi?',
+    a: 'Wireless AirPlay needs a shared local network (internet not required). For pointer control, Bluetooth pairing is also used with AssistiveTouch.',
+  },
+  {
+    q: 'Can I mirror multiple iPhones?',
+    a: 'Yes. Each connected iPhone opens in its own screen-shaped window so you can run several mirrors at once.',
+  },
+  {
+    q: 'What can the pointer do?',
+    a: 'Absolute pointer taps and drags only — scroll and gestures are click-drag based. There are no keyboard shortcuts or key injection.',
+  },
+];
+---
+
+<section class="section" id="faq">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">FAQ</p>
+      <h2>Common questions</h2>
+    </div>
+    <div class="faq">
+      {
+        faqs.map((item) => (
+          <details>
+            <summary>{item.q}</summary>
+            <div class="answer">
+              <div class="answer-inner">
+                <p>{item.a}</p>
+              </div>
+            </div>
+          </details>
+        ))
+      }
+    </div>
+  </div>
+</section>
+
+<script>
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  document.querySelectorAll('#faq details').forEach((details) => {
+    const summary = details.querySelector('summary');
+    const answer = details.querySelector('.answer');
+    if (!(summary instanceof HTMLElement) || !(answer instanceof HTMLElement)) return;
+
+    summary.addEventListener('click', (event) => {
+      event.preventDefault();
+      if (details.dataset.animating === 'true') return;
+
+      if (reduceMotion) {
+        details.toggleAttribute('open');
+        return;
+      }
+
+      details.dataset.animating = 'true';
+
+      if (details.open) {
+        answer.style.height = `${answer.scrollHeight}px`;
+        answer.offsetHeight;
+        answer.style.height = '0px';
+
+        const onEnd = () => {
+          details.removeAttribute('open');
+          answer.style.height = '';
+          details.dataset.animating = 'false';
+          answer.removeEventListener('transitionend', onEnd);
+        };
+        answer.addEventListener('transitionend', onEnd);
+      } else {
+        details.setAttribute('open', '');
+        answer.style.height = '0px';
+        answer.offsetHeight;
+        answer.style.height = `${answer.scrollHeight}px`;
+
+        const onEnd = () => {
+          answer.style.height = '';
+          details.dataset.animating = 'false';
+          answer.removeEventListener('transitionend', onEnd);
+        };
+        answer.addEventListener('transitionend', onEnd);
+      }
+    });
+  });
+</script>
+
+<style>
+  .faq {
+    display: grid;
+    border-top: 1px solid var(--line);
+  }
+
+  details {
+    border-bottom: 1px solid var(--line);
+  }
+
+  summary {
+    cursor: pointer;
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    list-style: none;
+    padding: 1.15rem 1.75rem 1.15rem 0;
+    position: relative;
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
+  }
+
+  summary::after {
+    content: '+';
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--accent);
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 1.25rem;
+    line-height: 1;
+  }
+
+  details[open] summary::after {
+    content: '−';
+  }
+
+  .answer {
+    height: 0;
+    overflow: hidden;
+    transition: height 0.3s ease;
+  }
+
+  details[open] .answer {
+    height: auto;
+  }
+
+  .answer-inner p {
+    padding: 0 0 1.15rem;
+    color: var(--ink-soft);
+    max-width: 48rem;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 0.25s ease 0.04s, transform 0.25s ease 0.04s;
+  }
+
+  details[open] .answer-inner p {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .answer,
+    .answer-inner p {
+      transition: none;
+    }
+  }
+</style>

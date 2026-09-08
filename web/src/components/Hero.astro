@@ -1,0 +1,222 @@
+---
+const download = 'https://github.com/enegalan/MacPhoneMirror/releases/latest';
+---
+
+<section class="hero" id="top">
+  <div class="wrap hero-copy">
+    <p class="brand-word">MacPhoneMirror</p>
+    <h1>
+      Turn your Mac into
+      <em>a phone you can click.</em>
+    </h1>
+    <p class="lede">
+      Native AirPlay receiver with AssistiveTouch pointer control,
+      and one floating screen per phone. No jailbreak. No phone app.
+    </p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href={download}>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M8 2v8m0 0L5 7m3 3 3-3M3 12.5h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Download for Mac
+      </a>
+      <a class="btn btn-ghost" href="#how-it-works">How it works</a>
+    </div>
+    <p class="meta">Open source · ~1.5 MB · macOS 14+</p>
+  </div>
+
+  <div class="hero-stage">
+    <span class="stage-glow stage-glow-a" aria-hidden="true"></span>
+    <span class="stage-glow stage-glow-b" aria-hidden="true"></span>
+    <img
+      class="hero-shot"
+      src="/intro/macbook.webp"
+      alt="MacBook showing MacPhoneMirror with an iPhone screen floating on the desktop"
+      width="2940"
+      height="1772"
+      decoding="async"
+      fetchpriority="high"
+    />
+    <img
+      class="phone-shot"
+      src="/intro/iphone.webp"
+      alt=""
+      width="1339"
+      height="2716"
+      decoding="async"
+      aria-hidden="true"
+    />
+  </div>
+</section>
+
+<style>
+  .hero {
+    padding-top: 3.25rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .hero-copy {
+    text-align: center;
+    padding-bottom: 2.4rem;
+    animation: rise-in 0.7s ease both;
+  }
+
+  .brand-word {
+    margin-bottom: 1.15rem;
+    font-family: var(--font-display);
+    font-size: clamp(2.6rem, 7vw, 4.75rem);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+    color: var(--ink);
+  }
+
+  h1 {
+    max-width: 18ch;
+    margin: 0 auto;
+    font-size: clamp(1.55rem, 3.2vw, 2.15rem);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+    color: var(--ink-soft);
+  }
+
+  h1 em {
+    display: block;
+    font-style: italic;
+    font-weight: 600;
+    background: var(--brand);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .lede {
+    max-width: 34rem;
+    margin: 1.1rem auto 0;
+    color: var(--ink-soft);
+    font-size: 1.06rem;
+  }
+
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.7rem;
+    margin-top: 1.7rem;
+  }
+
+  .meta {
+    margin-top: 1rem;
+    font-size: 0.88rem;
+    color: var(--muted);
+  }
+
+  .hero-stage {
+    position: relative;
+    width: min(100%, 1100px);
+    margin: 0 auto;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: clamp(0.4rem, 1.5vw, 1.25rem);
+    padding: 0 0.75rem 0.5rem;
+    animation: rise-in 0.85s ease 0.08s both;
+  }
+
+  .stage-glow {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(48px);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .stage-glow-a {
+    width: min(55%, 420px);
+    height: min(55%, 280px);
+    left: 18%;
+    bottom: 8%;
+    background: rgba(3, 177, 239, 0.35);
+    animation: glow-breathe 8s ease-in-out infinite;
+  }
+
+  .stage-glow-b {
+    width: min(40%, 300px);
+    height: min(40%, 240px);
+    right: 12%;
+    bottom: 18%;
+    background: rgba(127, 88, 255, 0.3);
+    animation: glow-breathe 10s ease-in-out -3s infinite;
+  }
+
+  @keyframes glow-breathe {
+    0%,
+    100% {
+      opacity: 0.7;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.08);
+    }
+  }
+
+  .hero-shot {
+    position: relative;
+    z-index: 2;
+    flex: 1 1 auto;
+    width: auto;
+    max-width: min(100%, 820px);
+    height: auto;
+    object-fit: contain;
+    filter: drop-shadow(0 24px 48px rgba(18, 23, 30, 0.12));
+  }
+
+  .phone-shot {
+    position: relative;
+    z-index: 3;
+    flex: 0 0 auto;
+    width: min(20vw, 140px);
+    height: auto;
+    margin-bottom: 1.8%;
+    margin-left: -7.5%;
+    filter: drop-shadow(0 18px 32px rgba(18, 23, 30, 0.14));
+  }
+
+  @media (max-width: 760px) {
+    .hero {
+      padding-top: 2.5rem;
+    }
+
+    .phone-shot {
+      display: none;
+    }
+
+    .hero-shot {
+      max-width: 100%;
+    }
+
+    .stage-glow-b {
+      display: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .stage-glow {
+      animation: none;
+    }
+  }
+
+  @media (min-width: 900px) {
+    .phone-shot {
+      width: 160px;
+    }
+  }
+
+  @media (min-width: 1100px) {
+    .phone-shot {
+      width: 175px;
+    }
+  }
+</style>
