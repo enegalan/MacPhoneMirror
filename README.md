@@ -5,6 +5,12 @@
   A fast, native macOS app that turns your Mac into a full-size iPhone display you can actually use.
 </p>
 
+<p align="center">
+  <a href="https://enegalan.github.io/MacPhoneMirror/">Official website</a>
+  ·
+  <a href="https://github.com/enegalan/MacPhoneMirror/releases/latest">Download</a>
+</p>
+
 ---
 <p align="center">
   <a href="https://github.com/enegalan/MacPhoneMirror/actions/workflows/ci.yml">
