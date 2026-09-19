@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <a href="https://enegalan.github.io/MacPhoneMirror/">Official website</a>
+  <a href="https://macphonemirror.vercel.app/">Official website</a>
   ·
   <a href="https://github.com/enegalan/MacPhoneMirror/releases/latest">Download</a>
 </p>
