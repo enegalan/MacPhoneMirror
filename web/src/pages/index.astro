@@ -9,9 +9,12 @@ import Gatekeeper from '../components/Gatekeeper.astro';
 import FAQ from '../components/FAQ.astro';
 import ClosingCTA from '../components/ClosingCTA.astro';
 import Footer from '../components/Footer.astro';
+import Analytics from '@vercel/analytics/astro'
+
 ---
 
 <BaseLayout>
+  <Analytics />
   <Ambient />
   <Nav />
   <main>
